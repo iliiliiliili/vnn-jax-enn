@@ -27,97 +27,117 @@ import haiku as hk
 
 
 class MLPHypermodelTest(parameterized.TestCase):
-
-  @parameterized.parameters([
-      ([], [], 4, True),
-      ([3], [], 5, True),
-      ([3, 7], [4], 3, True),
-      ([], [], 4, False),
-      ([3], [], 5, False),
-      ([3, 7], [4], 3, False),
-  ])
-  def test_ten_batches(self, model_hiddens: List[int], hyper_hiddens: List[int],
-                       index_dim: int, regression: bool):
-    """Simple test to run just 10 batches."""
-    test_experiment = supervised.make_test_experiment(regression)
-
-    def base_net(x):
-      return hk.nets.MLP(model_hiddens + [test_experiment.num_outputs])(x)
-
-    transformed_base = hk.without_apply_rng(hk.transform(base_net))
-
-    indexer = indexers.ScaledGaussianIndexer(index_dim, index_scale=1.0)
-    enn = hypermodels.MLPHypermodel(
-        transformed_base=transformed_base,
-        dummy_input=test_experiment.dummy_input,
-        indexer=indexer,
-        hidden_sizes=hyper_hiddens,
+    @parameterized.parameters(
+        [
+            ([], [], 4, True),
+            ([3], [], 5, True),
+            ([3, 7], [4], 3, True),
+            ([], [], 4, False),
+            ([3], [], 5, False),
+            ([3, 7], [4], 3, False),
+        ]
     )
-    experiment = test_experiment.experiment_ctor(enn)
-    experiment.train(10)
+    def test_ten_batches(
+        self,
+        model_hiddens: List[int],
+        hyper_hiddens: List[int],
+        index_dim: int,
+        regression: bool,
+    ):
+        """Simple test to run just 10 batches."""
+        test_experiment = supervised.make_test_experiment(regression)
 
-  @parameterized.parameters([
-      ([], [], [], [], 0.0, 4, True),
-      ([3], [], [4], [], 1.0, 4, True),
-      ([3, 7], [4], [4], [], 1.0, 4, True),
-      ([3, 7], [4], [4, 6], [5], 1.0, 4, True),
-      ([], [], [], [], 0.0, 4, False),
-      ([3], [], [4], [], 1.0, 4, False),
-      ([3, 7], [4], [4], [], 1.0, 4, False),
-      ([3, 7], [4], [4, 6], [5], 1.0, 4, False),
-  ])
-  def test_hyper_prior(self, model_hiddens: List[int], hyper_hiddens: List[int],
-                       prior_model_hiddens: List[int],
-                       prior_hyper_hiddens: List[int], prior_scale: float,
-                       index_dim: int, regression: bool):
-    """Simple test to run just 10 batches."""
-    test_experiment = supervised.make_test_experiment(regression)
+        def base_net(x):
+            return hk.nets.MLP(model_hiddens + [test_experiment.num_outputs])(x)
 
-    indexer = indexers.ScaledGaussianIndexer(index_dim, index_scale=1.0)
-    enn = hypermodels.MLPHypermodelWithHypermodelPrior(
-        base_output_sizes=model_hiddens + [test_experiment.num_outputs],
-        prior_scale=prior_scale,
-        dummy_input=test_experiment.dummy_input,
-        indexer=indexer,
-        prior_base_output_sizes=prior_model_hiddens +
-        [test_experiment.num_outputs],
-        hyper_hidden_sizes=hyper_hiddens,
-        prior_hyper_hidden_sizes=prior_hyper_hiddens)
+        transformed_base = hk.without_apply_rng(hk.transform(base_net))
 
-    experiment = test_experiment.experiment_ctor(enn)
-    experiment.train(10)
+        indexer = indexers.ScaledGaussianIndexer(index_dim, index_scale=1.0)
+        enn = hypermodels.MLPHypermodel(
+            transformed_base=transformed_base,
+            dummy_input=test_experiment.dummy_input,
+            indexer=indexer,
+            hidden_sizes=hyper_hiddens,
+        )
+        experiment = test_experiment.experiment_ctor(enn)
+        experiment.train(10)
 
-  @parameterized.parameters([
-      ([], [], [2], 0.0, 4, True),
-      ([3], [], [2, 2], 1.0, 1, True),
-      ([3], [], [2, 2], 1.0, 3, True),
-      ([3], [], [2, 2], 1.0, 5, True),
-      ([], [], [2], 0.0, 4, False),
-      ([3], [], [2, 2], 1.0, 1, False),
-      ([3], [], [2, 2], 1.0, 3, False),
-      ([3], [], [2, 2], 1.0, 5, False),
-  ])
-  def test_hyper_prior_independent_layers(self, model_hiddens: List[int],
-                                          hyper_hiddens: List[int],
-                                          prior_hiddens: List[int],
-                                          prior_scale: float, index_dim: int,
-                                          regression: bool):
-    """Simple test to run just 10 batches."""
-    test_experiment = supervised.make_test_experiment(regression)
-    indexer = indexers.ScaledGaussianIndexer(index_dim, index_scale=1.0)
+    @parameterized.parameters(
+        [
+            ([], [], [], [], 0.0, 4, True),
+            ([3], [], [4], [], 1.0, 4, True),
+            ([3, 7], [4], [4], [], 1.0, 4, True),
+            ([3, 7], [4], [4, 6], [5], 1.0, 4, True),
+            ([], [], [], [], 0.0, 4, False),
+            ([3], [], [4], [], 1.0, 4, False),
+            ([3, 7], [4], [4], [], 1.0, 4, False),
+            ([3, 7], [4], [4, 6], [5], 1.0, 4, False),
+        ]
+    )
+    def test_hyper_prior(
+        self,
+        model_hiddens: List[int],
+        hyper_hiddens: List[int],
+        prior_model_hiddens: List[int],
+        prior_hyper_hiddens: List[int],
+        prior_scale: float,
+        index_dim: int,
+        regression: bool,
+    ):
+        """Simple test to run just 10 batches."""
+        test_experiment = supervised.make_test_experiment(regression)
 
-    enn = hypermodels.MLPHypermodelPriorIndependentLayers(
-        base_output_sizes=model_hiddens + [test_experiment.num_outputs],
-        prior_scale=prior_scale,
-        dummy_input=test_experiment.dummy_input,
-        indexer=indexer,
-        prior_base_output_sizes=prior_hiddens +
-        [test_experiment.num_outputs],
-        hyper_hidden_sizes=hyper_hiddens,)
+        indexer = indexers.ScaledGaussianIndexer(index_dim, index_scale=1.0)
+        enn = hypermodels.MLPHypermodelWithHypermodelPrior(
+            base_output_sizes=model_hiddens + [test_experiment.num_outputs],
+            prior_scale=prior_scale,
+            dummy_input=test_experiment.dummy_input,
+            indexer=indexer,
+            prior_base_output_sizes=prior_model_hiddens + [test_experiment.num_outputs],
+            hyper_hidden_sizes=hyper_hiddens,
+            prior_hyper_hidden_sizes=prior_hyper_hiddens,
+        )
 
-    experiment = test_experiment.experiment_ctor(enn)
-    experiment.train(10)
+        experiment = test_experiment.experiment_ctor(enn)
+        experiment.train(10)
+
+    @parameterized.parameters(
+        [
+            ([], [], [2], 0.0, 4, True),
+            ([3], [], [2, 2], 1.0, 1, True),
+            ([3], [], [2, 2], 1.0, 3, True),
+            ([3], [], [2, 2], 1.0, 5, True),
+            ([], [], [2], 0.0, 4, False),
+            ([3], [], [2, 2], 1.0, 1, False),
+            ([3], [], [2, 2], 1.0, 3, False),
+            ([3], [], [2, 2], 1.0, 5, False),
+        ]
+    )
+    def test_hyper_prior_independent_layers(
+        self,
+        model_hiddens: List[int],
+        hyper_hiddens: List[int],
+        prior_hiddens: List[int],
+        prior_scale: float,
+        index_dim: int,
+        regression: bool,
+    ):
+        """Simple test to run just 10 batches."""
+        test_experiment = supervised.make_test_experiment(regression)
+        indexer = indexers.ScaledGaussianIndexer(index_dim, index_scale=1.0)
+
+        enn = hypermodels.MLPHypermodelPriorIndependentLayers(
+            base_output_sizes=model_hiddens + [test_experiment.num_outputs],
+            prior_scale=prior_scale,
+            dummy_input=test_experiment.dummy_input,
+            indexer=indexer,
+            prior_base_output_sizes=prior_hiddens + [test_experiment.num_outputs],
+            hyper_hidden_sizes=hyper_hiddens,
+        )
+
+        experiment = test_experiment.experiment_ctor(enn)
+        experiment.train(10)
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

@@ -29,49 +29,47 @@ import optax
 
 
 class ExperimentTest(parameterized.TestCase):
+    @parameterized.parameters(itertools.product([1, 3], [0, 1, 2]))
+    def test_train_decreases_loss(self, num_classes: int, seed: int):
+        """Train an ensemble ENN on a test dataset and make sure loss decreases."""
+        # Creat ENN and loss functions
+        enn = networks.MLPEnsembleEnn(
+            output_sizes=[20, 20, num_classes], num_ensemble=2,
+        )
+        if num_classes == 1:
+            single_loss = losses.L2Loss()
+        else:
+            single_loss = losses.XentLoss(num_classes)
+        loss_fn = losses.average_single_index_loss(single_loss, 2)
 
-  @parameterized.parameters(itertools.product([1, 3], [0, 1, 2]))
-  def test_train_decreases_loss(self, num_classes: int, seed: int):
-    """Train an ensemble ENN on a test dataset and make sure loss decreases."""
-    # Creat ENN and loss functions
-    enn = networks.MLPEnsembleEnn(
-        output_sizes=[20, 20, num_classes],
-        num_ensemble=2,
-    )
-    if num_classes == 1:
-      single_loss = losses.L2Loss()
-    else:
-      single_loss = losses.XentLoss(num_classes)
-    loss_fn = losses.average_single_index_loss(single_loss, 2)
+        # Create two different training losses
+        train_dataset = utils.make_test_data(30)
+        base_trainer = multiloss_experiment.MultilossTrainer(
+            loss_fn=loss_fn, dataset=train_dataset, should_train=lambda _: True,
+        )
+        prior_dataset = utils.make_test_data(2)  # An example of alternative data
+        prior_trainer = multiloss_experiment.MultilossTrainer(
+            loss_fn=loss_fn,
+            dataset=prior_dataset,
+            should_train=lambda step: step % 2 == 0,
+            name="prior",
+        )
 
-    # Create two different training losses
-    train_dataset = utils.make_test_data(30)
-    base_trainer = multiloss_experiment.MultilossTrainer(
-        loss_fn=loss_fn,
-        dataset=train_dataset,
-        should_train=lambda _: True,
-    )
-    prior_dataset = utils.make_test_data(2)  # An example of alternative data
-    prior_trainer = multiloss_experiment.MultilossTrainer(
-        loss_fn=loss_fn,
-        dataset=prior_dataset,
-        should_train=lambda step: step % 2 == 0,
-        name='prior'
-    )
-
-    experiment = multiloss_experiment.MultilossExperiment(
-        enn=enn,
-        trainers=[base_trainer, prior_trainer],
-        optimizer=optax.adam(1e-3),
-        seed=seed,
-    )
-    initial_loss = experiment.loss(next(train_dataset), seed + 1)
-    experiment.train(10)
-    final_loss = experiment.loss(next(train_dataset), seed + 2)
-    self.assertGreater(
-        initial_loss, final_loss,
-        f'final loss {final_loss} is greater than initial loss {initial_loss}')
+        experiment = multiloss_experiment.MultilossExperiment(
+            enn=enn,
+            trainers=[base_trainer, prior_trainer],
+            optimizer=optax.adam(1e-3),
+            seed=seed,
+        )
+        initial_loss = experiment.loss(next(train_dataset), seed + 1)
+        experiment.train(10)
+        final_loss = experiment.loss(next(train_dataset), seed + 2)
+        self.assertGreater(
+            initial_loss,
+            final_loss,
+            f"final loss {final_loss} is greater than initial loss {initial_loss}",
+        )
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

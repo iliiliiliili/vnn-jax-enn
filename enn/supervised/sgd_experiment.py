@@ -29,105 +29,110 @@ import optax
 
 
 class TrainingState(NamedTuple):
-  params: hk.Params
-  opt_state: optax.OptState
+    params: hk.Params
+    opt_state: optax.OptState
 
 
 class Experiment(supervised_base.BaseExperiment):
-  """Class to handle supervised training.
+    """Class to handle supervised training.
 
   Optional eval_datasets which is a collection of datasets to *evaluate*
   the loss on every eval_log_freq steps.
   """
 
-  def __init__(self,
-               enn: base.EpistemicNetwork,
-               loss_fn: base.LossFn,
-               optimizer: optax.GradientTransformation,
-               dataset: base.BatchIterator,
-               seed: int = 0,
-               logger: Optional[loggers.Logger] = None,
-               train_log_freq: int = 1,
-               eval_datasets: Optional[Dict[str, base.BatchIterator]] = None,
-               eval_log_freq: int = 1):
-    self.enn = enn
-    self.dataset = dataset
-    self.rng = hk.PRNGSequence(seed)
+    def __init__(
+        self,
+        enn: base.EpistemicNetwork,
+        loss_fn: base.LossFn,
+        optimizer: optax.GradientTransformation,
+        dataset: base.BatchIterator,
+        seed: int = 0,
+        logger: Optional[loggers.Logger] = None,
+        train_log_freq: int = 1,
+        eval_datasets: Optional[Dict[str, base.BatchIterator]] = None,
+        eval_log_freq: int = 1,
+    ):
+        self.enn = enn
+        self.dataset = dataset
+        self.rng = hk.PRNGSequence(seed)
 
-    # Internalize the loss_fn
-    self._loss = jax.jit(functools.partial(loss_fn, self.enn))
+        # Internalize the loss_fn
+        self._loss = jax.jit(functools.partial(loss_fn, self.enn))
 
-    # Internalize the eval datasets
-    self._eval_datasets = eval_datasets
-    self._eval_log_freq = eval_log_freq
+        # Internalize the eval datasets
+        self._eval_datasets = eval_datasets
+        self._eval_log_freq = eval_log_freq
 
-    # Forward network at random index
-    def forward(
-        params: hk.Params, inputs: base.Array, key: base.RngKey) -> base.Array:
-      index = self.enn.indexer(key)
-      return self.enn.apply(params, inputs, index)
-    self._forward = jax.jit(forward)
+        # Forward network at random index
+        def forward(
+            params: hk.Params, inputs: base.Array, key: base.RngKey
+        ) -> base.Array:
+            index = self.enn.indexer(key)
+            return self.enn.apply(params, inputs, index)
 
-    # Define the SGD step on the loss
-    def sgd_step(
-        state: TrainingState,
-        batch: base.Batch,
-        key: base.RngKey,
-    ) -> Tuple[TrainingState, base.LossMetrics]:
-      # Calculate the loss, metrics and gradients
-      (loss, metrics), grads = jax.value_and_grad(self._loss, has_aux=True)(
-          state.params, batch, key)
-      metrics.update({'loss': loss})
-      updates, new_opt_state = optimizer.update(grads, state.opt_state)
-      new_params = optax.apply_updates(state.params, updates)
-      new_state = TrainingState(
-          params=new_params,
-          opt_state=new_opt_state,
-      )
-      return new_state, metrics
-    self._sgd_step = jax.jit(sgd_step)
+        self._forward = jax.jit(forward)
 
-    # Initialize networks
-    batch = next(self.dataset)
-    index = self.enn.indexer(next(self.rng))
-    params = self.enn.init(next(self.rng), batch.x, index)
-    opt_state = optimizer.init(params)
-    self.state = TrainingState(params, opt_state)
-    self.step = 0
-    self.logger = logger or loggers.make_default_logger(
-        'experiment', time_delta=0)
-    self._train_log_freq = train_log_freq
+        # Define the SGD step on the loss
+        def sgd_step(
+            state: TrainingState, batch: base.Batch, key: base.RngKey,
+        ) -> Tuple[TrainingState, base.LossMetrics]:
+            # Calculate the loss, metrics and gradients
+            (loss, metrics), grads = jax.value_and_grad(self._loss, has_aux=True)(
+                state.params, batch, key
+            )
+            metrics.update({"loss": loss})
+            updates, new_opt_state = optimizer.update(grads, state.opt_state)
+            new_params = optax.apply_updates(state.params, updates)
+            new_state = TrainingState(params=new_params, opt_state=new_opt_state,)
+            return new_state, metrics
 
-  def train(self, num_batches: int):
-    """Train the ENN for num_batches."""
-    for _ in range(num_batches):
-      self.step += 1
-      self.state, loss_metrics = self._sgd_step(
-          self.state, next(self.dataset), next(self.rng))
+        self._sgd_step = jax.jit(sgd_step)
 
-      # Periodically log this performance as dataset=train.
-      if self.step % self._train_log_freq == 0:
-        loss_metrics.update(
-            {'dataset': 'train', 'step': self.step, 'sgd': True})
-        self.logger.write(loss_metrics)
+        # Initialize networks
+        batch = next(self.dataset)
+        index = self.enn.indexer(next(self.rng))
+        params = self.enn.init(next(self.rng), batch.x, index)
+        opt_state = optimizer.init(params)
+        self.state = TrainingState(params, opt_state)
+        self.step = 0
+        self.logger = logger or loggers.make_default_logger("experiment", time_delta=0)
+        self._train_log_freq = train_log_freq
 
-      # Periodically evaluate the other datasets.
-      if self._eval_datasets and self.step % self._eval_log_freq == 0:
-        for name, dataset in self._eval_datasets.items():
-          loss, metrics = self._loss(
-              self.state.params, next(dataset), next(self.rng))
-          metrics.update({
-              'dataset': name,
-              'step': self.step,
-              'sgd': False,
-              'loss': loss,
-          })
-          self.logger.write(metrics)
+    def train(self, num_batches: int):
+        """Train the ENN for num_batches."""
+        for _ in range(num_batches):
+            self.step += 1
+            self.state, loss_metrics = self._sgd_step(
+                self.state, next(self.dataset), next(self.rng)
+            )
 
-  def predict(self, inputs: base.Array, seed: int) -> base.Array:
-    """Evaluate the trained model at given inputs."""
-    return self._forward(self.state.params, inputs, jax.random.PRNGKey(seed))
+            # Periodically log this performance as dataset=train.
+            if self.step % self._train_log_freq == 0:
+                loss_metrics.update(
+                    {"dataset": "train", "step": self.step, "sgd": True}
+                )
+                self.logger.write(loss_metrics)
 
-  def loss(self, batch: base.Batch, seed: int) -> base.Array:
-    """Evaluate the loss for one batch of data."""
-    return self._loss(self.state.params, batch, jax.random.PRNGKey(seed))
+            # Periodically evaluate the other datasets.
+            if self._eval_datasets and self.step % self._eval_log_freq == 0:
+                for name, dataset in self._eval_datasets.items():
+                    loss, metrics = self._loss(
+                        self.state.params, next(dataset), next(self.rng)
+                    )
+                    metrics.update(
+                        {
+                            "dataset": name,
+                            "step": self.step,
+                            "sgd": False,
+                            "loss": loss,
+                        }
+                    )
+                    self.logger.write(metrics)
+
+    def predict(self, inputs: base.Array, seed: int) -> base.Array:
+        """Evaluate the trained model at given inputs."""
+        return self._forward(self.state.params, inputs, jax.random.PRNGKey(seed))
+
+    def loss(self, batch: base.Batch, seed: int) -> base.Array:
+        """Evaluate the loss for one batch of data."""
+        return self._loss(self.state.params, batch, jax.random.PRNGKey(seed))

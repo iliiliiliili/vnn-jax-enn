@@ -31,59 +31,63 @@ PriorFn = Callable[[base.Array, base.Index], base.Array]
 
 
 class EnnWithAdditivePrior(base.EpistemicNetwork):
-  """Create an ENN with additive prior_fn applied to outputs."""
-
-  def __init__(self,
-               enn: base.EpistemicNetwork,
-               prior_fn: PriorFn,
-               prior_scale: float = 1.):
     """Create an ENN with additive prior_fn applied to outputs."""
-    def apply_fn(params: hk.Params,
-                 inputs: base.Array,
-                 index: base.Index) -> base.OutputWithPrior:
-      net_out = enn.apply(params, inputs, index)
-      prior = prior_scale * prior_fn(inputs, index)
-      if isinstance(net_out, base.OutputWithPrior):
-        net_out: base.OutputWithPrior = net_out
-        return net_out._replace(prior=net_out.prior + prior)
-      else:
-        return base.OutputWithPrior(train=net_out, prior=prior)
-    super().__init__(
-        apply=apply_fn,
-        init=enn.init,
-        indexer=enn.indexer,
-    )
+
+    def __init__(
+        self, enn: base.EpistemicNetwork, prior_fn: PriorFn, prior_scale: float = 1.0
+    ):
+        """Create an ENN with additive prior_fn applied to outputs."""
+
+        def apply_fn(
+            params: hk.Params, inputs: base.Array, index: base.Index
+        ) -> base.OutputWithPrior:
+            net_out = enn.apply(params, inputs, index)
+            prior = prior_scale * prior_fn(inputs, index)
+            if isinstance(net_out, base.OutputWithPrior):
+                net_out: base.OutputWithPrior = net_out
+                return net_out._replace(prior=net_out.prior + prior)
+            else:
+                return base.OutputWithPrior(train=net_out, prior=prior)
+
+        super().__init__(
+            apply=apply_fn, init=enn.init, indexer=enn.indexer,
+        )
 
 
-def convert_enn_to_prior_fn(enn: base.EpistemicNetwork,
-                            dummy_input: base.Array,
-                            key: base.RngKey) -> PriorFn:
-  index_key, init_key, _ = jax.random.split(key, 3)
-  index = enn.indexer(index_key)
-  prior_params = enn.init(init_key, dummy_input, index)
-  def prior_fn(x: base.Array, z: base.Index) -> base.Output:
-    return enn.apply(prior_params, x, z)
-  return prior_fn
+def convert_enn_to_prior_fn(
+    enn: base.EpistemicNetwork, dummy_input: base.Array, key: base.RngKey
+) -> PriorFn:
+    index_key, init_key, _ = jax.random.split(key, 3)
+    index = enn.indexer(index_key)
+    prior_params = enn.init(init_key, dummy_input, index)
+
+    def prior_fn(x: base.Array, z: base.Index) -> base.Output:
+        return enn.apply(prior_params, x, z)
+
+    return prior_fn
 
 
 def make_null_prior(output_dim: int) -> Callable[[base.Array], base.Array]:
-  def null_prior(inputs: base.Array) -> base.Array:
-    return jnp.zeros([inputs.shape[0], output_dim], dtype=jnp.float32)
-  return null_prior
+    def null_prior(inputs: base.Array) -> base.Array:
+        return jnp.zeros([inputs.shape[0], output_dim], dtype=jnp.float32)
+
+    return null_prior
+
 
 # Configure GP kernel via float=gamma or uniform between gamma_min, gamma_max.
 GpGamma = Union[float, Tuple[float, float]]
 
 
-def _parse_gamma(gamma: GpGamma,
-                 num_feat: int,
-                 key: base.RngKey) -> Union[float, base.Array]:
-  if isinstance(gamma, float) or isinstance(gamma, int):
-    return float(gamma)
-  else:
-    gamma_min, gamma_max = gamma
-    return gamma_min + (gamma_max - gamma_min) * jax.random.uniform(
-        key, shape=[1, num_feat, 1])
+def _parse_gamma(
+    gamma: GpGamma, num_feat: int, key: base.RngKey
+) -> Union[float, base.Array]:
+    if isinstance(gamma, float) or isinstance(gamma, int):
+        return float(gamma)
+    else:
+        gamma_min, gamma_max = gamma
+        return gamma_min + (gamma_max - gamma_min) * jax.random.uniform(
+            key, shape=[1, num_feat, 1]
+        )
 
 
 def make_random_feat_gp(
@@ -91,10 +95,10 @@ def make_random_feat_gp(
     output_dim: int,
     num_feat: int,
     key: base.RngKey,
-    gamma: GpGamma = 1.,
-    scale: float = 1.,
+    gamma: GpGamma = 1.0,
+    scale: float = 1.0,
 ) -> Callable[[base.Array], base.Array]:
-  """Generate a random features GP realization via random features.
+    """Generate a random features GP realization via random features.
 
   This is based on the "random kitchen sink" approximation from Rahimi,Recht.
   See blog post/paper: http://www.argmin.net/2017/12/05/kitchen-sinks/.
@@ -111,22 +115,20 @@ def make_random_feat_gp(
   Returns:
     A callable gp_instance: inputs -> outputs in jax.
   """
-  weights_key, bias_key, alpha_key, gamma_key = jax.random.split(key, num=4)
-  weights = jax.random.normal(
-      weights_key, shape=[num_feat, input_dim, output_dim])
-  bias = 2 * jnp.pi * jax.random.uniform(
-      bias_key, shape=[1, num_feat, output_dim])
-  alpha = jax.random.normal(alpha_key, shape=[num_feat]) / jnp.sqrt(num_feat)
-  gamma = _parse_gamma(gamma, num_feat, gamma_key)
+    weights_key, bias_key, alpha_key, gamma_key = jax.random.split(key, num=4)
+    weights = jax.random.normal(weights_key, shape=[num_feat, input_dim, output_dim])
+    bias = 2 * jnp.pi * jax.random.uniform(bias_key, shape=[1, num_feat, output_dim])
+    alpha = jax.random.normal(alpha_key, shape=[num_feat]) / jnp.sqrt(num_feat)
+    gamma = _parse_gamma(gamma, num_feat, gamma_key)
 
-  def gp_instance(inputs: base.Array) -> base.Array:
-    """Assumes one batch dimension and flattens input to match that."""
-    flat_inputs = jax.vmap(jnp.ravel)(inputs)
-    input_embedding = jnp.einsum('bi,kio->bko', flat_inputs, weights)
-    random_feats = jnp.cos(gamma * input_embedding + bias)
-    return scale * jnp.einsum('bko,k->bo', random_feats, alpha)
+    def gp_instance(inputs: base.Array) -> base.Array:
+        """Assumes one batch dimension and flattens input to match that."""
+        flat_inputs = jax.vmap(jnp.ravel)(inputs)
+        input_embedding = jnp.einsum("bi,kio->bko", flat_inputs, weights)
+        random_feats = jnp.cos(gamma * input_embedding + bias)
+        return scale * jnp.einsum("bko,k->bo", random_feats, alpha)
 
-  return gp_instance
+    return gp_instance
 
 
 def get_random_mlp_with_index(
@@ -135,9 +137,9 @@ def get_random_mlp_with_index(
     rng: chex.PRNGKey,
     prior_output_sizes: Optional[Iterable[int]] = None,
     prior_weight_std: float = 3,
-    prior_bias_std: float = 0.1
+    prior_bias_std: float = 0.1,
 ) -> PriorFn:
-  """Construct a prior func f(x, z) based on a random MLP.
+    """Construct a prior func f(x, z) based on a random MLP.
 
   The returned function assumes the data input, x, to include a batch dimension
   but the index input, z, to not include a batch dimension.
@@ -155,40 +157,46 @@ def get_random_mlp_with_index(
     a random function of two inputs x, and z.
   """
 
-  if prior_output_sizes is None:
-    prior_output_sizes = [10, 10, 1]
+    if prior_output_sizes is None:
+        prior_output_sizes = [10, 10, 1]
 
-  def net_fn(x: base.Array, z: base.Array):
-    # repeat z along the batch dimension of x.
-    z = jnp.tile(z, reps=(x.shape[0], 1))
-    xz = jnp.concatenate([x, z], axis=1)
-    mlp = hk.nets.MLP(
-        prior_output_sizes,
-        w_init=hk.initializers.VarianceScaling(scale=prior_weight_std),
-        b_init=hk.initializers.TruncatedNormal(stddev=prior_bias_std))
-    return mlp(xz)
+    def net_fn(x: base.Array, z: base.Array):
+        # repeat z along the batch dimension of x.
+        z = jnp.tile(z, reps=(x.shape[0], 1))
+        xz = jnp.concatenate([x, z], axis=1)
+        mlp = hk.nets.MLP(
+            prior_output_sizes,
+            w_init=hk.initializers.VarianceScaling(scale=prior_weight_std),
+            b_init=hk.initializers.TruncatedNormal(stddev=prior_bias_std),
+        )
+        return mlp(xz)
 
-  transformed_fn = hk.without_apply_rng(hk.transform(net_fn))
-  params = transformed_fn.init(rng, x_sample, z_sample)
-  return lambda x, z: transformed_fn.apply(params, x, z)
+    transformed_fn = hk.without_apply_rng(hk.transform(net_fn))
+    params = transformed_fn.init(rng, x_sample, z_sample)
+    return lambda x, z: transformed_fn.apply(params, x, z)
 
 
 # TODO(author2): Forming Modules with Prior is prone to bugs as the "prior"
 # parameters will get returned in the init. In general, you should try and
 # use the EnnWithAdditivePrior above instead.
-WARN = ('WARNING: prior parameters will be included as hk.Params for module.'
-        'If possible, you should use EnnWithAdditivePrior instead.')
+WARN = (
+    "WARNING: prior parameters will be included as hk.Params for module."
+    "If possible, you should use EnnWithAdditivePrior instead."
+)
 
 
 @dataclasses.dataclass
 class NetworkWithAdditivePrior(hk.Module):
-  """Combines network and a prior using a specified function."""
-  net: hk.Module
-  prior_net: hk.Module
-  prior_scale: float = 1.
+    """Combines network and a prior using a specified function."""
 
-  def __call__(self, *args, **kwargs) -> base.Array:
-    logging.warning(WARN)
-    prior = jax.lax.stop_gradient(self.prior_net(*args, **kwargs))  # pytype:disable=not-callable
-    net_out = self.net(*args, **kwargs)  # pytype:disable=not-callable
-    return net_out + prior * self.prior_scale
+    net: hk.Module
+    prior_net: hk.Module
+    prior_scale: float = 1.0
+
+    def __call__(self, *args, **kwargs) -> base.Array:
+        logging.warning(WARN)
+        prior = jax.lax.stop_gradient(
+            self.prior_net(*args, **kwargs)
+        )  # pytype:disable=not-callable
+        net_out = self.net(*args, **kwargs)  # pytype:disable=not-callable
+        return net_out + prior * self.prior_scale

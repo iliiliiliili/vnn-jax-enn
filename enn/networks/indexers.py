@@ -23,51 +23,61 @@ import jax.numpy as jnp
 
 
 class PrngIndexer(base.EpistemicIndexer):
-  """Index by JAX PRNG sequence."""
+    """Index by JAX PRNG sequence."""
 
-  def __call__(self, key: base.RngKey) -> base.Index:
-    return key
+    def __call__(self, key: base.RngKey) -> base.Index:
+        return key
 
 
 @dataclasses.dataclass
 class EnsembleIndexer(base.EpistemicIndexer):
-  """Index into an ensemble by integer."""
-  num_ensemble: int
+    """Index into an ensemble by integer."""
 
-  def __call__(self, key: base.RngKey) -> base.Index:
-    return jax.random.randint(key, [], 0, self.num_ensemble)
+    num_ensemble: int
+
+    def __call__(self, key: base.RngKey) -> base.Index:
+        return jax.random.randint(key, [], 0, self.num_ensemble)
 
 
 @dataclasses.dataclass
 class ScaledGaussianIndexer(base.EpistemicIndexer):
-  """A scaled Gaussian indexer."""
-  index_dim: int
-  # When index_scale is 1.0 the returned random variable has expected norm = 1.
-  index_scale: float = 1.0
+    """A scaled Gaussian indexer."""
 
-  def __call__(self, key: base.RngKey) -> base.Index:
-    return self.index_scale / jnp.sqrt(self.index_dim) * jax.random.normal(
-        key, shape=[self.index_dim])
+    index_dim: int
+    # When index_scale is 1.0 the returned random variable has expected norm = 1.
+    index_scale: float = 1.0
+
+    def __call__(self, key: base.RngKey) -> base.Index:
+        return (
+            self.index_scale
+            / jnp.sqrt(self.index_dim)
+            * jax.random.normal(key, shape=[self.index_dim])
+        )
 
 
 @dataclasses.dataclass
 class GaussianWithUnitIndexer(base.EpistemicIndexer):
-  """Produces index (1, z) for z dimension=index_dim-1 unit ball."""
-  index_dim: int
+    """Produces index (1, z) for z dimension=index_dim-1 unit ball."""
 
-  @property
-  def mean_index(self) -> base.Array:
-    return jnp.append(1, jnp.zeros(self.index_dim - 1))
+    index_dim: int
 
-  def __call__(self, key: base.RngKey) -> base.Index:
-    return jnp.append(1, jax.random.normal(
-        key, shape=[self.index_dim - 1]) / jnp.sqrt(self.index_dim - 1))
+    @property
+    def mean_index(self) -> base.Array:
+        return jnp.append(1, jnp.zeros(self.index_dim - 1))
+
+    def __call__(self, key: base.RngKey) -> base.Index:
+        return jnp.append(
+            1,
+            jax.random.normal(key, shape=[self.index_dim - 1])
+            / jnp.sqrt(self.index_dim - 1),
+        )
 
 
 @dataclasses.dataclass
 class DirichletIndexer(base.EpistemicIndexer):
-  """Samples a Dirichlet index with parameter alpha."""
-  alpha: base.Array
+    """Samples a Dirichlet index with parameter alpha."""
 
-  def __call__(self, key: base.RngKey) -> base.Index:
-    return jax.random.dirichlet(key, self.alpha)
+    alpha: base.Array
+
+    def __call__(self, key: base.RngKey) -> base.Index:
+        return jax.random.dirichlet(key, self.alpha)

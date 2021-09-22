@@ -26,26 +26,27 @@ import optax
 
 
 class TestExperiment(NamedTuple):
-  num_outputs: int
-  experiment_ctor: Callable[[base.EpistemicNetwork], sgd_experiment.Experiment]
-  dummy_input: base.Array
+    num_outputs: int
+    experiment_ctor: Callable[[base.EpistemicNetwork], sgd_experiment.Experiment]
+    dummy_input: base.Array
 
 
 def make_test_experiment(regression: bool) -> TestExperiment:
-  """Utility function to set up a supervised experiment for testing."""
-  dataset = utils.make_test_data(20)
-  optimizer = optax.adam(1e-3)
-  if regression:
-    num_outputs = 1
-    single_loss = losses.L2Loss()
-  else:
-    num_outputs = 2
-    single_loss = losses.XentLoss(num_outputs)
+    """Utility function to set up a supervised experiment for testing."""
+    dataset = utils.make_test_data(20)
+    optimizer = optax.adam(1e-3)
+    if regression:
+        num_outputs = 1
+        single_loss = losses.L2Loss()
+    else:
+        num_outputs = 2
+        single_loss = losses.XentLoss(num_outputs)
 
-  loss_fn = losses.average_single_index_loss(single_loss, num_index_samples=1)
-  return TestExperiment(
-      num_outputs=num_outputs,
-      experiment_ctor=lambda enn: sgd_experiment.Experiment(  # pylint:disable=g-long-lambda
-          enn, loss_fn, optimizer, dataset),
-      dummy_input=next(dataset).x,
-  )
+    loss_fn = losses.average_single_index_loss(single_loss, num_index_samples=1)
+    return TestExperiment(
+        num_outputs=num_outputs,
+        experiment_ctor=lambda enn: sgd_experiment.Experiment(  # pylint:disable=g-long-lambda
+            enn, loss_fn, optimizer, dataset
+        ),
+        dummy_input=next(dataset).x,
+    )

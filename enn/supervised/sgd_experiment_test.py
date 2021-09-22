@@ -29,36 +29,35 @@ import optax
 
 
 class ExperimentTest(parameterized.TestCase):
+    @parameterized.parameters(itertools.product([1, 3], [0, 1]))
+    def test_train_decreases_loss(self, num_outputs: int, seed: int):
+        """Train an ensemble ENN on a test dataset and make sure loss decreases."""
 
-  @parameterized.parameters(itertools.product([1, 3], [0, 1]))
-  def test_train_decreases_loss(self, num_outputs: int, seed: int):
-    """Train an ensemble ENN on a test dataset and make sure loss decreases."""
+        num_ensemble = 5
+        output_sizes = [8, 8, num_outputs]
+        enn = networks.MLPEnsembleEnn(
+            output_sizes=output_sizes, num_ensemble=num_ensemble,
+        )
 
-    num_ensemble = 5
-    output_sizes = [8, 8, num_outputs]
-    enn = networks.MLPEnsembleEnn(
-        output_sizes=output_sizes,
-        num_ensemble=num_ensemble,
-    )
-
-    dataset = utils.make_test_data(100)
-    optimizer = optax.adam(1e-3)
-    if num_outputs == 1:
-      single_loss = losses.L2Loss()
-    elif num_outputs > 1:
-      single_loss = losses.XentLoss(num_outputs)
-    else:
-      raise ValueError(f'num_outputs should be >= 1. It is {num_outputs}.')
-    loss_fn = losses.average_single_index_loss(single_loss,
-                                               num_index_samples=10)
-    experiment = Experiment(enn, loss_fn, optimizer, dataset, seed)
-    initial_loss = experiment.loss(next(dataset), seed+1)
-    experiment.train(10)
-    final_loss = experiment.loss(next(dataset), seed+2)
-    self.assertGreater(
-        initial_loss, final_loss,
-        f'final loss {final_loss} is greater than initial loss {initial_loss}')
+        dataset = utils.make_test_data(100)
+        optimizer = optax.adam(1e-3)
+        if num_outputs == 1:
+            single_loss = losses.L2Loss()
+        elif num_outputs > 1:
+            single_loss = losses.XentLoss(num_outputs)
+        else:
+            raise ValueError(f"num_outputs should be >= 1. It is {num_outputs}.")
+        loss_fn = losses.average_single_index_loss(single_loss, num_index_samples=10)
+        experiment = Experiment(enn, loss_fn, optimizer, dataset, seed)
+        initial_loss = experiment.loss(next(dataset), seed + 1)
+        experiment.train(10)
+        final_loss = experiment.loss(next(dataset), seed + 2)
+        self.assertGreater(
+            initial_loss,
+            final_loss,
+            f"final loss {final_loss} is greater than initial loss {initial_loss}",
+        )
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

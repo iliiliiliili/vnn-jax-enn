@@ -24,18 +24,18 @@ from enn import base
 
 @dataclasses.dataclass
 class BaseExperiment(abc.ABC):
-  """Base interface for experiment classes."""
-  dataset: base.BatchIterator
+    """Base interface for experiment classes."""
 
-  @abc.abstractmethod
-  def train(self, num_batches: int):
-    """Train the ENN for num_batches."""
+    dataset: base.BatchIterator
 
-  @abc.abstractmethod
-  def predict(
-      self, inputs: base.Array, seed: int) -> base.Array:
-    """Evaluate the trained model at given inputs."""
+    @abc.abstractmethod
+    def train(self, num_batches: int):
+        """Train the ENN for num_batches."""
 
-  @abc.abstractmethod
-  def loss(self, batch: base.Batch, seed: int) -> base.Array:
-    """Calculate the loss at a given batch."""
+    @abc.abstractmethod
+    def predict(self, inputs: base.Array, seed: int) -> base.Array:
+        """Evaluate the trained model at given inputs."""
+
+    @abc.abstractmethod
+    def loss(self, batch: base.Batch, seed: int) -> base.Array:
+        """Calculate the loss at a given batch."""

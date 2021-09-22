@@ -25,22 +25,22 @@ import jax.numpy as jnp
 
 
 class UtilsTest(parameterized.TestCase):
+    @parameterized.parameters(
+        [
+            [networks.PrngIndexer(), 23],
+            [networks.ScaledGaussianIndexer(10), 32],
+            [networks.GaussianWithUnitIndexer(5), 40],
+            [networks.EnsembleIndexer(13), 50],
+        ]
+    )
+    def test_batch_indexer(self, indexer: base.EpistemicIndexer, batch_size: int):
+        batch_indexer = utils.make_batch_indexer(indexer, batch_size)
+        batch_index = batch_indexer(jax.random.PRNGKey(0))
+        # Check that the batch index is of the right leading dimension
+        assert batch_index.shape[0] == batch_size
+        # Check that they are not all identical
+        assert not jnp.isclose(batch_index, batch_index[0]).all()
 
-  @parameterized.parameters([
-      [networks.PrngIndexer(), 23],
-      [networks.ScaledGaussianIndexer(10), 32],
-      [networks.GaussianWithUnitIndexer(5), 40],
-      [networks.EnsembleIndexer(13), 50],
-  ])
-  def test_batch_indexer(
-      self, indexer: base.EpistemicIndexer, batch_size: int):
-    batch_indexer = utils.make_batch_indexer(indexer, batch_size)
-    batch_index = batch_indexer(jax.random.PRNGKey(0))
-    # Check that the batch index is of the right leading dimension
-    assert batch_index.shape[0] == batch_size
-    # Check that they are not all identical
-    assert not jnp.isclose(batch_index, batch_index[0]).all()
 
-
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

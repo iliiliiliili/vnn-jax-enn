@@ -24,19 +24,18 @@ from enn.networks import index_mlp
 
 
 class NetworkTest(parameterized.TestCase):
-
-  @parameterized.parameters([
-      ([], True), ([10, 10], True), ([], False), ([10, 10], False)])
-  def test_index_mlp(self, hiddens: List[int], regression: bool):
-    """Simple test to run just 10 batches."""
-    test_experiment = supervised.make_test_experiment(regression)
-    enn = index_mlp.IndexMLPEnn(
-        output_sizes=hiddens+[test_experiment.num_outputs],
-        index_dim=10,
+    @parameterized.parameters(
+        [([], True), ([10, 10], True), ([], False), ([10, 10], False)]
     )
-    experiment = test_experiment.experiment_ctor(enn)
-    experiment.train(10)
+    def test_index_mlp(self, hiddens: List[int], regression: bool):
+        """Simple test to run just 10 batches."""
+        test_experiment = supervised.make_test_experiment(regression)
+        enn = index_mlp.IndexMLPEnn(
+            output_sizes=hiddens + [test_experiment.num_outputs], index_dim=10,
+        )
+        experiment = test_experiment.experiment_ctor(enn)
+        experiment.train(10)
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

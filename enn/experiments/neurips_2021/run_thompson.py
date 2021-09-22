@@ -23,42 +23,46 @@ from enn.experiments.neurips_2021 import thompson
 from jax.config import config
 
 # Double-precision in JAX helps with numerical stability
-config.update('jax_enable_x64', True)
+config.update("jax_enable_x64", True)
 
 # GP configuration
-flags.DEFINE_integer('input_dim', 1, 'Input dimension.')
-flags.DEFINE_float('action_ratio', 10., 'Ratio of actions to input_dim.')
-flags.DEFINE_float('noise_std', 0.1, 'Additive noise standard deviation.')
-flags.DEFINE_integer('seed', 1, 'Seed for testbed problem.')
-flags.DEFINE_integer('num_steps', 100_000, 'Number of steps to run experiment.')
+flags.DEFINE_integer("input_dim", 1, "Input dimension.")
+flags.DEFINE_float("action_ratio", 10.0, "Ratio of actions to input_dim.")
+flags.DEFINE_float("noise_std", 0.1, "Additive noise standard deviation.")
+flags.DEFINE_integer("seed", 1, "Seed for testbed problem.")
+flags.DEFINE_integer("num_steps", 100_000, "Number of steps to run experiment.")
 
 
 # ENN agent
-flags.DEFINE_integer('agent_id', 0, 'Which agent id')
-flags.DEFINE_enum('agent', 'all',
-                  ['all', 'ensemble', 'dropout', 'hypermodel', 'bbb'],
-                  'Which agent family.')
+flags.DEFINE_integer("agent_id", 0, "Which agent id")
+flags.DEFINE_enum(
+    "agent",
+    "all",
+    ["all", "ensemble", "dropout", "hypermodel", "bbb"],
+    "Which agent family.",
+)
 
 FLAGS = flags.FLAGS
 
 
 def main(_):
-  # Form the appropriate agent for training
-  agent_config = agent_factories.load_agent_config(FLAGS.agent_id, FLAGS.agent)
+    # Form the appropriate agent for training
+    agent_config = agent_factories.load_agent_config(FLAGS.agent_id, FLAGS.agent)
 
-  # Evaluate performance in Thompson sampling
-  experiment = thompson.ThompsonEnnBandit(
-      agent_config,
-      input_dim=FLAGS.input_dim,
-      noise_std=FLAGS.noise_std,
-      num_actions=int(FLAGS.action_ratio * FLAGS.input_dim),
-      seed=FLAGS.seed,
-  )
-  log_freq = int(FLAGS.num_steps / 100)
-  if log_freq == 0:
-    log_freq = 1
-  experiment.run(FLAGS.num_steps, log_freq)
-  print(f'total_regret={experiment.total_regret}')
+    # Evaluate performance in Thompson sampling
+    experiment = thompson.ThompsonEnnBandit(
+        agent_config,
+        input_dim=FLAGS.input_dim,
+        noise_std=FLAGS.noise_std,
+        num_actions=int(FLAGS.action_ratio * FLAGS.input_dim),
+        seed=FLAGS.seed,
+    )
+    log_freq = int(FLAGS.num_steps / 100)
+    if log_freq == 0:
+        log_freq = 1
+    experiment.run(FLAGS.num_steps, log_freq)
+    print(f"total_regret={experiment.total_regret}")
 
-if __name__ == '__main__':
-  app.run(main)
+
+if __name__ == "__main__":
+    app.run(main)

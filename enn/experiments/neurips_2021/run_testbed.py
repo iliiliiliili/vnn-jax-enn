@@ -18,47 +18,66 @@
 
 from absl import app
 from absl import flags
+from jax.interpreters.xla import primitive_uses_outfeed
 from enn.experiments.neurips_2021 import agent_factories
 from enn.experiments.neurips_2021 import agents
 from enn.experiments.neurips_2021 import load
 from jax.config import config
 
 # Double-precision in JAX helps with numerical stability
-config.update('jax_enable_x64', True)
+config.update("jax_enable_x64", True)
 
 # GP configuration
-flags.DEFINE_integer('input_dim', 100, 'Input dimension.')
-flags.DEFINE_float('data_ratio', 100., 'Ratio of num_train to input_dim.')
-flags.DEFINE_float('noise_std', 0.1, 'Additive noise standard deviation.')
-flags.DEFINE_integer('seed', 1, 'Seed for testbed problem.')
+flags.DEFINE_integer("input_dim", 100, "Input dimension.")
+flags.DEFINE_float("data_ratio", 100.0, "Ratio of num_train to input_dim.")
+flags.DEFINE_float("noise_std", 0.1, "Additive noise standard deviation.")
+flags.DEFINE_integer("seed", 1, "Seed for testbed problem.")
 
 
 # ENN agent
-flags.DEFINE_integer('agent_id', 0, 'Which agent id')
-flags.DEFINE_enum('agent', 'all',
-                  ['all', 'ensemble', 'dropout', 'hypermodel', 'bbb'],
-                  'Which agent family.')
+flags.DEFINE_integer("agent_id", 0, "Which agent id")
+flags.DEFINE_enum(
+    "agent",
+    "all",
+    ["all", "ensemble", "dropout", "hypermodel", "bbb"],
+    "Which agent family.",
+)
 
 FLAGS = flags.FLAGS
 
 
 def main(_):
-  # Load the appropriate testbed problem
-  problem = load.regression_load(
-      input_dim=FLAGS.input_dim,
-      data_ratio=FLAGS.data_ratio,
-      seed=FLAGS.seed,
-      noise_std=FLAGS.noise_std,
-  )
+    # Load the appropriate testbed problem
+    problem = load.regression_load(
+        input_dim=FLAGS.input_dim,
+        data_ratio=FLAGS.data_ratio,
+        seed=FLAGS.seed,
+        noise_std=FLAGS.noise_std,
+    )
 
-  # Form the appropriate agent for training
-  agent_config = agent_factories.load_agent_config(FLAGS.agent_id, FLAGS.agent)
-  agent = agents.VanillaEnnAgent(agent_config)
+    all_results = []
 
-  # Evaluate the quality of the ENN sampler after training
-  enn_sampler = agent(problem.train_data, problem.prior_knowledge)
-  kl_quality = problem.evaluate_quality(enn_sampler)
-  print(f'kl_estimate={kl_quality.kl_estimate}')
+    for agent_id in range(FLAGS.agent_id):
 
-if __name__ == '__main__':
-  app.run(main)
+        print("agent_id", agent_id)
+
+        # Form the appropriate agent for training
+        agent_config = agent_factories.load_agent_config_sweep(agent_id, FLAGS.agent)
+        agent = agents.VanillaEnnAgent(agent_config.config_ctor())
+
+        # Evaluate the quality of the ENN sampler after training
+        enn_sampler = agent(problem.train_data, problem.prior_knowledge)
+        kl_quality = problem.evaluate_quality(enn_sampler)
+        print(f"kl_estimate={kl_quality.kl_estimate}")
+        all_results.append(kl_quality)
+
+        with open("results.txt", "a") as f:
+            f.write(
+                str(agent_id) + " " + str(kl_quality) + " " + str(agent_config) + "\n"
+            )
+
+    print(all_results)
+
+
+if __name__ == "__main__":
+    app.run(main)
