@@ -27,8 +27,8 @@ from jax.config import config
 config.update('jax_enable_x64', True)
 
 # GP configuration
-flags.DEFINE_integer('input_dim', 1, 'Input dimension.')
-flags.DEFINE_float('data_ratio', 1., 'Ratio of num_train to input_dim.')
+flags.DEFINE_integer('input_dim', 100, 'Input dimension.')
+flags.DEFINE_float('data_ratio', 100., 'Ratio of num_train to input_dim.')
 flags.DEFINE_float('noise_std', 0.1, 'Additive noise standard deviation.')
 flags.DEFINE_integer('seed', 1, 'Seed for testbed problem.')
 

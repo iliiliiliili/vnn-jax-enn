@@ -59,7 +59,7 @@ setuptools.setup(
         'scikit-image',
         'scikit-learn',
         'six',
-        'tensorflow',
+        'tensorflow-gpu',
         'tensorflow-datasets',
         'termcolor',
         'typing-extensions',
