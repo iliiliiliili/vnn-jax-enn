@@ -29,6 +29,9 @@ from enn.networks.categorical_ensembles import CatOutputWithPrior
 # Dropout
 from enn.networks.dropout import MLPDropoutENN
 
+# Dropout
+from enn.networks.vnn import MLPVariationalENN
+
 # Einsum MLP
 from enn.networks.einsum_mlp import EnsembleMLP
 from enn.networks.einsum_mlp import make_einsum_ensemble_mlp_enn

@@ -17,6 +17,7 @@
 
 """Epistemic indexers for ENNs."""
 import dataclasses
+from typing import List
 from enn import base
 import jax
 import jax.numpy as jnp
@@ -53,7 +54,6 @@ class ScaledGaussianIndexer(base.EpistemicIndexer):
             / jnp.sqrt(self.index_dim)
             * jax.random.normal(key, shape=[self.index_dim])
         )
-
 
 @dataclasses.dataclass
 class GaussianWithUnitIndexer(base.EpistemicIndexer):

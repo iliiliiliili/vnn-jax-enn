@@ -16,7 +16,9 @@
 # ============================================================================
 """Collecting factory methods for the best ENN agent configs."""
 
-from typing import Any, Callable, Dict, List, Sequence
+import jax
+from enn.networks.vnn import Activation
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Union
 
 from acme.utils import loggers
 import dataclasses
@@ -100,6 +102,67 @@ def make_dropout_ctor(
             num_batches=1000,  # Irrelevant for bandit
             logger=loggers.make_default_logger("experiment", time_delta=0),
             seed=seed,
+        )
+
+    return make_agent_config
+
+
+def make_vnn_ctor(
+    activation: Optional[Union[Activation, List[Activation]]] = None,
+    activation_mode: Union[
+        Literal["mean"],
+        Literal["std"],
+        Literal["mean+std"],
+        Literal["end"],
+        Literal["mean+end"],
+        Literal["std+end"],
+        Literal["mean+std+end"],
+    ] = "mean",
+    use_batch_norm: bool = False,
+    batch_norm_mode: Union[
+        Literal["mean"],
+        Literal["std"],
+        Literal["mean+std"],
+        Literal["end"],
+        Literal["mean+end"],
+        Literal["std+end"],
+        Literal["mean+std+end"],
+    ] = "mean",
+    global_std_mode: Union[
+        Literal["none"], Literal["replace"], Literal["multiply"]
+    ] = "none",
+    num_index_samples: int = 10,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    learning_rate: int = 1e-3,
+    seed: int = 0,
+) -> ConfigCtor:
+    """Generate a dropout agent config."""
+
+    def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
+        output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
+        return networks.MLPVariationalENN(
+            output_sizes=output_sizes,
+            activation=activation,
+            activation_mode=activation_mode,
+            use_batch_norm=use_batch_norm,
+            batch_norm_mode=batch_norm_mode,
+            global_std_mode=global_std_mode,
+            seed=seed,
+        )
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        """Factory method to create agent_config, swap this for different agents."""
+        return agents.VanillaEnnConfig(
+            enn_ctor=make_enn,
+            loss_ctor=enn_losses.default_enn_loss(
+                num_index_samples=num_index_samples,
+                distribution="exponential",
+            ),
+            num_batches=1000,  # Irrelevant for bandit
+            logger=loggers.make_default_logger("experiment", time_delta=0),
+            seed=seed,
+            optimizer=optax.adam(learning_rate),
         )
 
     return make_agent_config
@@ -292,10 +355,60 @@ def make_bbb_sweep() -> List[AgentCtorConfig]:
 
     return sweep
 
+def make_vnn_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting bbb agents
+    for activation in ["relu", "tanh"]:
+        for learning_rate in [1e-3, 3e-4, 1e-4]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    for activation_mode in ["mean", "mean+std", "mean+end", "end", "none"]:
+                        for use_batch_norm in [False]:
+                            for global_std_mode in ["none", "replace", "multiply"]:
+                                for num_index_samples in [10, 100, 1]:
+                                    batch_norm_mode = activation_mode
+
+                                    current_activation = {
+                                        "relu": jax.nn.relu,
+                                        "tanh": jax.nn.tanh,
+                                    }[activation]
+
+                                    if len(activation_mode.split("+")) > 1:
+                                        current_activation = [current_activation] * len(activation_mode.split("+"))
+
+                                    settings = {
+                                        "agent": "vnn",
+                                        "activation": current_activation,
+                                        "learning_rate": learning_rate,
+                                        "num_layers": num_layers,
+                                        "hidden_size": hidden_size,
+                                        "activation_mode": activation_mode,
+                                        "batch_norm_mode": batch_norm_mode,
+                                        "use_batch_norm": use_batch_norm,
+                                        "global_std_mode": global_std_mode,
+                                    }
+                                    config_ctor = make_vnn_ctor(
+                                        current_activation, activation_mode, use_batch_norm, batch_norm_mode,
+                                        global_std_mode, num_index_samples, hidden_size
+                                    )
+                                    sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
 
 def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     if agent == "all":
+        agent_sweep = (
+            make_ensemble_sweep()
+            + make_dropout_sweep()
+            + make_hypermodel_sweep()
+            + make_bbb_sweep()
+            + make_vnn_sweep()
+        )
+    if agent == "all_old":
         agent_sweep = (
             make_ensemble_sweep()
             + make_dropout_sweep()
@@ -310,6 +423,8 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
         agent_sweep = make_dropout_sweep()
     elif agent == "bbb":
         agent_sweep = make_bbb_sweep()
+    elif agent == "vnn":
+        agent_sweep = make_vnn_sweep()
     else:
         raise ValueError(f"agent={agent} is not valid!")
 
@@ -322,10 +437,10 @@ def load_agent_config(agent_id: int, agent: str = "all") -> agents.VanillaEnnCon
     return sweep[agent_id].config_ctor()
 
 
-def load_agent_config_sweep(agent_id: int, agent: str = "all"):
+def load_agent_config_sweep(agent: str = "all"):
     """Use this in run.py to load an agent config from FLAGS.agent_id."""
     sweep = make_agent_sweep(agent)
-    return sweep[agent_id]
+    return sweep
 
 
 def xm_agent_sweep(agent: str = "all") -> Sequence[int]:

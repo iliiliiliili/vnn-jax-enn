@@ -35,11 +35,12 @@ flags.DEFINE_integer("seed", 1, "Seed for testbed problem.")
 
 
 # ENN agent
-flags.DEFINE_integer("agent_id", 0, "Which agent id")
+flags.DEFINE_integer("agent_id_start", 0, "Which agent id start")
+flags.DEFINE_integer("agent_id_end", -1, "Which agent id end")
 flags.DEFINE_enum(
     "agent",
     "all",
-    ["all", "ensemble", "dropout", "hypermodel", "bbb"],
+    ["all", "ensemble", "dropout", "hypermodel", "bbb", "vnn"],
     "Which agent family.",
 )
 
@@ -57,12 +58,20 @@ def main(_):
 
     all_results = []
 
-    for agent_id in range(FLAGS.agent_id):
+    sweep = agent_factories.load_agent_config_sweep(FLAGS.agent)
+    sweep = (
+        sweep[FLAGS.agent_id_start :]
+        if FLAGS.agent_id_end == -1
+        else sweep[FLAGS.agent_id_start : FLAGS.agent_id_end]
+    )
 
-        print("agent_id", agent_id)
+    for i, agent_config in enumerate(sweep):
+
+        agent_id = FLAGS.agent_id_start + i
+
+        print("agent_id", agent_id, "of", len(sweep))
 
         # Form the appropriate agent for training
-        agent_config = agent_factories.load_agent_config_sweep(agent_id, FLAGS.agent)
         agent = agents.VanillaEnnAgent(agent_config.config_ctor())
 
         # Evaluate the quality of the ENN sampler after training
@@ -73,7 +82,12 @@ def main(_):
 
         with open("results.txt", "a") as f:
             f.write(
-                str(agent_id) + " " + str(kl_quality) + " " + str(agent_config) + "\n"
+                str(agent_id)
+                + " "
+                + str(kl_quality)
+                + " "
+                + str(agent_config)
+                + "\n"
             )
 
     print(all_results)
