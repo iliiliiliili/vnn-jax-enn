@@ -136,6 +136,7 @@ def make_vnn_ctor(
     num_layers: int = 2,
     learning_rate: int = 1e-3,
     seed: int = 0,
+    num_batches: int = 1000,
 ) -> ConfigCtor:
     """Generate a dropout agent config."""
 
@@ -159,7 +160,7 @@ def make_vnn_ctor(
                 num_index_samples=num_index_samples,
                 distribution="exponential",
             ),
-            num_batches=1000,  # Irrelevant for bandit
+            num_batches=num_batches,  # Irrelevant for bandit
             logger=loggers.make_default_logger("experiment", time_delta=0),
             seed=seed,
             optimizer=optax.adam(learning_rate),
@@ -359,15 +360,64 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
 
-    # Adding reasonably interesting bbb agents
     for activation in ["relu", "tanh"]:
-        for learning_rate in [1e-3, 3e-4, 1e-4]:
+        for learning_rate in [1e-3, 1e-4, 5e-5]:
             for num_layers in [2, 3]:
                 for hidden_size in [50, 100]:
                     for activation_mode in ["mean", "mean+std", "mean+end", "end", "none"]:
                         for use_batch_norm in [False]:
                             for global_std_mode in ["none", "replace", "multiply"]:
-                                for num_index_samples in [10, 100, 1]:
+                                for num_index_samples in [10, 100]:
+                                    for num_batches in [1000, 3000]:
+                                        batch_norm_mode = activation_mode
+
+                                        current_activation = {
+                                            "relu": jax.nn.relu,
+                                            "tanh": jax.nn.tanh,
+                                        }[activation]
+
+                                        if len(activation_mode.split("+")) > 1:
+                                            current_activation = [current_activation] * len(activation_mode.split("+"))
+
+                                        settings = {
+                                            "agent": "vnn",
+                                            "activation": activation,
+                                            "learning_rate": learning_rate,
+                                            "num_layers": num_layers,
+                                            "hidden_size": hidden_size,
+                                            "activation_mode": activation_mode,
+                                            "batch_norm_mode": batch_norm_mode,
+                                            "use_batch_norm": use_batch_norm,
+                                            "global_std_mode": global_std_mode,
+                                            "num_batches": num_batches,
+                                            "num_index_samples": num_index_samples,
+                                        }
+                                        config_ctor = make_vnn_ctor(
+                                            current_activation, activation_mode, use_batch_norm, batch_norm_mode,
+                                            global_std_mode, num_index_samples, hidden_size, num_batches=num_batches
+                                        )
+                                        sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
+def make_vnn_selected_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    for activation in ["relu", "tanh"]:
+        for learning_rate in [1e-3]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    for use_batch_norm in [False]:
+                        for num_batches in [1000, 3000]:
+                            for num_index_samples in [10, 100]:
+                                for activation_mode, global_std_mode in [
+                                    ("mean", "multiply"), ("mean+end", "multiply"),
+                                    ("mean+end", "replace"), ("none", "multiply"),
+                                    ("none", "none"),
+                                ]:
+
                                     batch_norm_mode = activation_mode
 
                                     current_activation = {
@@ -380,7 +430,7 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
 
                                     settings = {
                                         "agent": "vnn",
-                                        "activation": current_activation,
+                                        "activation": activation,
                                         "learning_rate": learning_rate,
                                         "num_layers": num_layers,
                                         "hidden_size": hidden_size,
@@ -388,13 +438,14 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
                                         "batch_norm_mode": batch_norm_mode,
                                         "use_batch_norm": use_batch_norm,
                                         "global_std_mode": global_std_mode,
+                                        "num_batches": num_batches,
+                                        "num_index_samples": num_index_samples,
                                     }
                                     config_ctor = make_vnn_ctor(
                                         current_activation, activation_mode, use_batch_norm, batch_norm_mode,
-                                        global_std_mode, num_index_samples, hidden_size
+                                        global_std_mode, num_index_samples, hidden_size, num_batches=num_batches
                                     )
                                     sweep.append(AgentCtorConfig(settings, config_ctor))
-
     return sweep
 
 
@@ -408,7 +459,7 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
             + make_bbb_sweep()
             + make_vnn_sweep()
         )
-    if agent == "all_old":
+    elif agent == "all_old":
         agent_sweep = (
             make_ensemble_sweep()
             + make_dropout_sweep()
@@ -425,6 +476,8 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
         agent_sweep = make_bbb_sweep()
     elif agent == "vnn":
         agent_sweep = make_vnn_sweep()
+    elif agent == "vnn_selected":
+        agent_sweep = make_vnn_selected_sweep()
     else:
         raise ValueError(f"agent={agent} is not valid!")
 
