@@ -28,9 +28,9 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 # GP configuration
-flags.DEFINE_integer("input_dim", 100, "Input dimension.")
-flags.DEFINE_float("data_ratio", 100.0, "Ratio of num_train to input_dim.")
-flags.DEFINE_float("noise_std", 0.1, "Additive noise standard deviation.")
+flags.DEFINE_multi_integer("input_dim", [1, 10, 100], "Input dimension.")
+flags.DEFINE_multi_float("data_ratio", [1.0, 10.0, 100.0], "Ratio of num_train to input_dim.")
+flags.DEFINE_multi_float("noise_std", [0.01, 0.1, 1.0], "Additive noise standard deviation.")
 flags.DEFINE_integer("seed", 1, "Seed for testbed problem.")
 
 
@@ -40,7 +40,7 @@ flags.DEFINE_integer("agent_id_end", -1, "Which agent id end")
 flags.DEFINE_enum(
     "agent",
     "all",
-    ["all", "ensemble", "dropout", "hypermodel", "bbb", "vnn"],
+    ["all", "all_old", "ensemble", "dropout", "hypermodel", "bbb", "vnn", "vnn_selected"],
     "Which agent family.",
 )
 
@@ -48,49 +48,55 @@ FLAGS = flags.FLAGS
 
 
 def main(_):
-    # Load the appropriate testbed problem
-    problem = load.regression_load(
-        input_dim=FLAGS.input_dim,
-        data_ratio=FLAGS.data_ratio,
-        seed=FLAGS.seed,
-        noise_std=FLAGS.noise_std,
-    )
 
-    all_results = []
+    for input_dim in FLAGS.input_dim:
+        for data_ratio in FLAGS.data_ratio:
+            for noise_std in FLAGS.noise_std:
+                # Load the appropriate testbed problem
+                problem = load.regression_load(
+                    input_dim=input_dim,
+                    data_ratio=data_ratio,
+                    seed=FLAGS.seed,
+                    noise_std=noise_std,
+                )
 
-    sweep = agent_factories.load_agent_config_sweep(FLAGS.agent)
-    sweep = (
-        sweep[FLAGS.agent_id_start :]
-        if FLAGS.agent_id_end == -1
-        else sweep[FLAGS.agent_id_start : FLAGS.agent_id_end]
-    )
+                all_results = []
 
-    for i, agent_config in enumerate(sweep):
+                sweep = agent_factories.load_agent_config_sweep(FLAGS.agent)
+                sweep = (
+                    sweep[FLAGS.agent_id_start :]
+                    if FLAGS.agent_id_end == -1
+                    else sweep[FLAGS.agent_id_start : FLAGS.agent_id_end]
+                )
 
-        agent_id = FLAGS.agent_id_start + i
+                for i, agent_config in enumerate(sweep):
 
-        print("agent_id", agent_id, "of", len(sweep))
+                    agent_id = FLAGS.agent_id_start + i
 
-        # Form the appropriate agent for training
-        agent = agents.VanillaEnnAgent(agent_config.config_ctor())
+                    print("input_dim", input_dim, "data_ratio", data_ratio, "noise_std", noise_std)
+                    print("agent_id", agent_id, "of", len(sweep))
 
-        # Evaluate the quality of the ENN sampler after training
-        enn_sampler = agent(problem.train_data, problem.prior_knowledge)
-        kl_quality = problem.evaluate_quality(enn_sampler)
-        print(f"kl_estimate={kl_quality.kl_estimate}")
-        all_results.append(kl_quality)
+                    # Form the appropriate agent for training
+                    agent = agents.VanillaEnnAgent(agent_config.config_ctor())
 
-        with open("results.txt", "a") as f:
-            f.write(
-                str(agent_id)
-                + " "
-                + str(kl_quality)
-                + " "
-                + str(agent_config)
-                + "\n"
-            )
+                    # Evaluate the quality of the ENN sampler after training
+                    enn_sampler = agent(problem.train_data, problem.prior_knowledge)
+                    kl_quality = problem.evaluate_quality(enn_sampler)
+                    print(f"kl_estimate={kl_quality.kl_estimate}")
+                    all_results.append(kl_quality)
 
-    print(all_results)
+                    with open("results_" + FLAGS.agent + "_id"+ str(input_dim) + "dr" + str(data_ratio) + "ns" + str(noise_std) + ".txt", "a") as f:
+                        
+                        f.write(
+                            str(agent_id)
+                            + " "
+                            + str(kl_quality.kl_estimate)
+                            + " "
+                            + " ".join([str(k) + "=" + str(v) for (k, v) in agent_config.settings.items()])
+                            + "\n"
+                        )
+
+                print(all_results)
 
 
 if __name__ == "__main__":
