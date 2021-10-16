@@ -44,6 +44,8 @@ flags.DEFINE_enum(
     "Which agent family.",
 )
 
+flags.DEFINE_string("experiment_group", "", "Name of the experiment group")
+
 FLAGS = flags.FLAGS
 
 
@@ -85,7 +87,11 @@ def main(_):
                     print(f"kl_estimate={kl_quality.kl_estimate}")
                     all_results.append(kl_quality)
 
-                    with open("results_" + FLAGS.agent + "_id"+ str(input_dim) + "dr" + str(data_ratio) + "ns" + str(noise_std) + ".txt", "a") as f:
+                    with open(
+                        "results_" + FLAGS.experiment_group + ("_" if len(FLAGS.experiment_group) > 0 else "") +
+                        FLAGS.agent + "_id"+ str(input_dim) + "dr" + str(data_ratio) + "ns" + str(noise_std) +
+                        ".txt", "a"
+                    ) as f:
                         
                         f.write(
                             str(agent_id)
