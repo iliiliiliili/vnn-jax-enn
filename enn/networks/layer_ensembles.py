@@ -91,7 +91,6 @@ class LayerEnsembleNetworkWithPriors(base.EpistemicNetwork):
         self,
         output_sizes: Sequence[int],
         num_ensembles: Sequence[int],
-        dummy_input = None,
         prior_scale: float = 1.0,
         module: hk.Module = hk.Linear,
         seed : int = 0,
