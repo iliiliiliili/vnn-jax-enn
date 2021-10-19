@@ -17,11 +17,11 @@
 
 """Epistemic indexers for ENNs."""
 import dataclasses
-from typing import List
+from typing import List, Sequence
 from enn import base
 import jax
 import jax.numpy as jnp
-
+import numpy as np
 
 class PrngIndexer(base.EpistemicIndexer):
     """Index by JAX PRNG sequence."""
@@ -38,6 +38,17 @@ class EnsembleIndexer(base.EpistemicIndexer):
 
     def __call__(self, key: base.RngKey) -> base.Index:
         return jax.random.randint(key, [], 0, self.num_ensemble)
+
+@dataclasses.dataclass
+class LayerEnsembleIndexer(base.EpistemicIndexer):
+    """Index into an ensemble by integer."""
+
+    num_ensembles: Sequence[int]
+
+    def __call__(self, key: base.RngKey) -> base.Index:
+        return jnp.array(
+            [jax.random.randint(key, [], 0, num_ensemble) for num_ensemble in self.num_ensembles]
+        )
 
 
 @dataclasses.dataclass

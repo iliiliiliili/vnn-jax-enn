@@ -56,6 +56,9 @@ def make_noise_fn(
     if isinstance(indexer, networks.EnsembleIndexer):
         return _make_ensemble_gaussian_noise(noise_std, seed)
 
+    elif isinstance(indexer, networks.LayerEnsembleIndexer):
+        return _make_layer_ensemble_gaussian_noise(noise_std, seed)
+
     elif isinstance(indexer, networks.ScaledGaussianIndexer):
         return _make_gaussian_index_noise(indexer.index_dim, noise_std, seed)
 
@@ -85,6 +88,32 @@ def _make_ensemble_gaussian_noise(noise_std: float, seed: int) -> NoiseFn:
         chex.assert_shape(data_index, (None, 1))
         if not index.shape:  # If it's a single integer -> repeat for batch
             index = jnp.repeat(index, len(data_index))
+        data_keys = _make_key(data_index, seed)
+        batch_keys = batch_fold_in(data_keys, index)
+        samples = batch_normal(batch_keys)[:, None]
+        chex.assert_equal_shape([samples, data_index])
+        return samples * noise_std
+
+    return noise_fn
+
+
+def _make_layer_ensemble_gaussian_noise(noise_std: float, seed: int, factor=50) -> NoiseFn:
+    """Factory method to add Gaussian noise for ensemble index."""
+    batch_fold_in = jax.vmap(jax.random.fold_in)
+    batch_normal = jax.vmap(jax.random.normal)
+
+    def noise_fn(data_index: base.DataIndex, index: base.Index) -> base.Array:
+        """Assumes integer index for ensemble."""
+        chex.assert_shape(data_index, (None, 1))
+        if len(index.shape) <= 1:  # If it's a single integer -> repeat for batch
+
+            total_index = 0
+            f = 1
+            for i in index:
+                total_index += i * f
+                f *= factor
+
+            index = jnp.repeat(total_index, len(data_index))
         data_keys = _make_key(data_index, seed)
         batch_keys = batch_fold_in(data_keys, index)
         samples = batch_normal(batch_keys)[:, None]

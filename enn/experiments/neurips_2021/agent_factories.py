@@ -69,6 +69,40 @@ def make_ensemble_ctor(
     return make_agent_config
 
 
+def make_layer_ensemble_ctor(
+    num_ensembles: List[int],
+    noise_scale: float,
+    prior_scale: float,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    seed: int = 0,
+) -> ConfigCtor:
+    """Generate an ensemble agent config."""
+
+    def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
+        output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
+        return networks.LayerEnsembleNetworkWithPriors(
+            output_sizes=output_sizes,
+            num_ensembles=num_ensembles,
+            dummy_input=jnp.ones([prior.num_train, prior.input_dim]),
+            prior_scale=prior_scale,
+        )
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        """Factory method to create agent_config, swap this for different agents."""
+        return agents.VanillaEnnConfig(
+            enn_ctor=make_enn,
+            loss_ctor=enn_losses.gaussian_regression_loss(
+                sum(num_ensembles), noise_scale, l2_weight_decay=0
+            ),
+            num_batches=1000,  # Irrelevant for bandit
+            logger=loggers.make_default_logger("experiment", time_delta=0),
+            seed=seed,
+        )
+
+    return make_agent_config
+
+
 def make_dropout_ctor(
     dropout_rate: float,
     regularization_scale: float,
@@ -283,6 +317,39 @@ def make_ensemble_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
+def make_layer_ensemble_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting ensemble agents
+    for num_ensemble in [1, 3, 10, 30]:
+        for noise_scale in [0, 1]:
+            for prior_scale in [0, 1]:
+                for num_layers in [2, 3]:
+                    for hidden_size in [50]:
+
+                        num_ensembles = [num_ensemble for _ in range(num_layers + 1)]
+
+                        settings = {
+                            "agent": "layer_ensemble",
+                            "num_ensembles": num_ensembles,
+                            "noise_scale": noise_scale,
+                            "prior_scale": prior_scale,
+                            "num_layers": num_layers,
+                            "hidden_size": hidden_size,
+                        }
+                        config_ctor = make_layer_ensemble_ctor(
+                            num_ensembles,
+                            noise_scale,
+                            prior_scale,
+                            hidden_size,
+                            num_layers,
+                        )
+                        sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
 def make_dropout_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
@@ -458,6 +525,7 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
             + make_hypermodel_sweep()
             + make_bbb_sweep()
             + make_vnn_sweep()
+            + make_layer_ensemble_sweep()
         )
     elif agent == "all_old":
         agent_sweep = (
@@ -478,6 +546,8 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
         agent_sweep = make_vnn_sweep()
     elif agent == "vnn_selected":
         agent_sweep = make_vnn_selected_sweep()
+    elif agent == "layer_ensemble":
+        agent_sweep = make_layer_ensemble_sweep()
     else:
         raise ValueError(f"agent={agent} is not valid!")
 

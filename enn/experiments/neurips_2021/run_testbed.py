@@ -40,7 +40,7 @@ flags.DEFINE_integer("agent_id_end", -1, "Which agent id end")
 flags.DEFINE_enum(
     "agent",
     "all",
-    ["all", "all_old", "ensemble", "dropout", "hypermodel", "bbb", "vnn", "vnn_selected"],
+    ["all", "all_old", "ensemble", "dropout", "hypermodel", "bbb", "vnn", "vnn_selected", "layer_ensemble"],
     "Which agent family.",
 )
 
