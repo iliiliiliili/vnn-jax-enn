@@ -16,6 +16,7 @@
 # ============================================================================
 """Collecting factory methods for the best ENN agent configs."""
 
+from functools import reduce
 import jax
 from enn.networks.vnn import Activation
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Union
@@ -84,7 +85,6 @@ def make_layer_ensemble_ctor(
         return networks.LayerEnsembleNetworkWithPriors(
             output_sizes=output_sizes,
             num_ensembles=num_ensembles,
-            dummy_input=jnp.ones([prior.num_train, prior.input_dim]),
             prior_scale=prior_scale,
         )
 
@@ -93,7 +93,7 @@ def make_layer_ensemble_ctor(
         return agents.VanillaEnnConfig(
             enn_ctor=make_enn,
             loss_ctor=enn_losses.gaussian_regression_loss(
-                sum(num_ensembles), noise_scale, l2_weight_decay=0
+                reduce(lambda x, y: x * y, num_ensembles), noise_scale, l2_weight_decay=0
             ),
             num_batches=1000,  # Irrelevant for bandit
             logger=loggers.make_default_logger("experiment", time_delta=0),
@@ -322,7 +322,7 @@ def make_layer_ensemble_sweep() -> List[AgentCtorConfig]:
     sweep = []
 
     # Adding reasonably interesting ensemble agents
-    for num_ensemble in [1, 3, 10, 30]:
+    for num_ensemble in [1, 3, 5, 10]:
         for noise_scale in [0, 1]:
             for prior_scale in [0, 1]:
                 for num_layers in [2, 3]:
