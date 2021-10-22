@@ -21,6 +21,8 @@ float_fields = [
     "regularization_scale",
     "sigma_0",
     "learning_rate",
+    "mean_error",
+    "std_error",
 ]
 int_fields = [
     "num_ensemble",

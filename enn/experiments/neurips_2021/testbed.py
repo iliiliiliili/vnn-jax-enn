@@ -138,7 +138,19 @@ class TestbedGPRegression(testbed_base.TestbedProblem):
         kl_estimates = batched_kl(posterior_mean, posterior_std, enn_mean, enn_std)
         chex.assert_shape(kl_estimates, [num_test])
         kl_estimate = jnp.mean(kl_estimates)
-        return testbed_base.ENNQuality(kl_estimate)
+
+        l1mean = jnp.mean(jnp.abs((posterior_mean - enn_mean)/posterior_mean))
+        l1std = jnp.mean(jnp.abs((posterior_std - enn_std)/posterior_std))
+
+        result = testbed_base.ENNQuality(
+            kl_estimate,
+            {
+                "mean_error": l1mean,
+                "std_error": l1std,
+            }
+        )
+
+        return result
 
 
 def _kl_gaussian(mean_1: float, std_1: float, mean_2: float, std_2: float) -> float:
