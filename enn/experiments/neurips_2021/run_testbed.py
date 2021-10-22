@@ -29,8 +29,12 @@ config.update("jax_enable_x64", True)
 
 # GP configuration
 flags.DEFINE_multi_integer("input_dim", [1, 10, 100], "Input dimension.")
-flags.DEFINE_multi_float("data_ratio", [1.0, 10.0, 100.0], "Ratio of num_train to input_dim.")
-flags.DEFINE_multi_float("noise_std", [0.01, 0.1, 1.0], "Additive noise standard deviation.")
+flags.DEFINE_multi_float(
+    "data_ratio", [1.0, 10.0, 100.0], "Ratio of num_train to input_dim."
+)
+flags.DEFINE_multi_float(
+    "noise_std", [0.01, 0.1, 1.0], "Additive noise standard deviation."
+)
 flags.DEFINE_integer("seed", 1, "Seed for testbed problem.")
 
 
@@ -40,7 +44,17 @@ flags.DEFINE_integer("agent_id_end", -1, "Which agent id end")
 flags.DEFINE_enum(
     "agent",
     "all",
-    ["all", "all_old", "ensemble", "dropout", "hypermodel", "bbb", "vnn", "vnn_selected", "layer_ensemble"],
+    [
+        "all",
+        "all_old",
+        "ensemble",
+        "dropout",
+        "hypermodel",
+        "bbb",
+        "vnn",
+        "vnn_selected",
+        "layer_ensemble",
+    ],
     "Which agent family.",
 )
 
@@ -75,30 +89,69 @@ def main(_):
 
                     agent_id = FLAGS.agent_id_start + i
 
-                    print("input_dim", input_dim, "data_ratio", data_ratio, "noise_std", noise_std)
+                    print(
+                        "input_dim",
+                        input_dim,
+                        "data_ratio",
+                        data_ratio,
+                        "noise_std",
+                        noise_std,
+                    )
                     print("agent_id", agent_id, "of", len(sweep))
 
                     # Form the appropriate agent for training
                     agent = agents.VanillaEnnAgent(agent_config.config_ctor())
 
                     # Evaluate the quality of the ENN sampler after training
-                    enn_sampler = agent(problem.train_data, problem.prior_knowledge)
+                    enn_sampler = agent(
+                        problem.train_data, problem.prior_knowledge
+                    )
                     kl_quality = problem.evaluate_quality(enn_sampler)
-                    print(f"kl_estimate={kl_quality.kl_estimate}")
+                    print(
+                        f"kl_estimate={kl_quality.kl_estimate}"
+                        + "mean_error="
+                        + str(kl_quality.extra["mean_error"])
+                        + " "
+                        + "std_error="
+                        + str(kl_quality.extra["std_error"])
+                    )
                     all_results.append(kl_quality)
 
                     with open(
-                        "results_" + FLAGS.experiment_group + ("_" if len(FLAGS.experiment_group) > 0 else "") +
-                        FLAGS.agent + "_id"+ str(input_dim) + "dr" + str(data_ratio) + "ns" + str(noise_std) +
-                        ".txt", "a"
+                        "results_"
+                        + FLAGS.experiment_group
+                        + ("_" if len(FLAGS.experiment_group) > 0 else "")
+                        + FLAGS.agent
+                        + "_id"
+                        + str(input_dim)
+                        + "dr"
+                        + str(data_ratio)
+                        + "ns"
+                        + str(noise_std)
+                        + ".txt",
+                        "a",
                     ) as f:
-                        
+
                         f.write(
                             str(agent_id)
                             + " "
                             + str(kl_quality.kl_estimate)
                             + " "
-                            + " ".join([str(k) + "=" + str(v) for (k, v) in agent_config.settings.items()])
+                            + "mean_error="
+                            + str(kl_quality.extra["mean_error"])
+                            + " "
+                            + "std_error="
+                            + str(kl_quality.extra["std_error"])
+                            + " "
+                            + " ".join(
+                                [
+                                    str(k) + "=" + str(v)
+                                    for (
+                                        k,
+                                        v,
+                                    ) in agent_config.settings.items()
+                                ]
+                            )
                             + "\n"
                         )
 
