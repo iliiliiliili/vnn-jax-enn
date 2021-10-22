@@ -174,6 +174,14 @@ def make_vnn_ctor(
 ) -> ConfigCtor:
     """Generate a dropout agent config."""
 
+    def get_cosine_lr_scheduler(init_lr, final_lr, n_epoch=1000):
+        import numpy as np
+        def lr_scheduler(epoch_idx):
+            lr = final_lr + 0.5 * (init_lr - final_lr) * (1 + jnp.cos(jnp.pi * epoch_idx / n_epoch))
+            return lr
+
+        return lr_scheduler
+
     def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
         output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
         return networks.MLPVariationalENN(
@@ -197,7 +205,7 @@ def make_vnn_ctor(
             num_batches=num_batches,  # Irrelevant for bandit
             logger=loggers.make_default_logger("experiment", time_delta=0),
             seed=seed,
-            optimizer=optax.adam(learning_rate),
+            optimizer=optax.adam(get_cosine_lr_scheduler(learning_rate, learning_rate * 1e-3, num_batches)),
         )
 
     return make_agent_config
