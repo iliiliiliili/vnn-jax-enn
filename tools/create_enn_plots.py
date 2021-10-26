@@ -1,7 +1,14 @@
 from plotnine import (
-    ggplot, aes, geom_line, geom_point, facet_grid, facet_wrap,
-    scale_y_continuous, geom_hline, position_dodge,
-    geom_errorbar
+    ggplot,
+    aes,
+    geom_line,
+    geom_point,
+    facet_grid,
+    facet_wrap,
+    scale_y_continuous,
+    geom_hline,
+    position_dodge,
+    geom_errorbar,
 )
 from plotnine.data import economics
 from pandas import DataFrame
@@ -10,9 +17,14 @@ from plotnine.scales.scale_xy import scale_x_discrete
 from glob import glob
 import re
 
+tex_template_file = "tools/tex_table_template.tex"
+
+with open(tex_template_file, "r") as f:
+    tex_template = f.read()
+
 # files = glob("results_vnn_selected*")
-files = glob("results_id*")
-# files =  glob("results_vnn_selected*") +  glob("results_f*")
+# files = glob("results_id*")
+files = glob("results_all_old*")
 
 float_fields = [
     "noise_scale",
@@ -34,6 +46,24 @@ int_fields = [
 int_list_fields = [
     "num_ensembles",
 ]
+
+field_tex_names = {
+    "kl" : "KL",
+    "kl_std" : "Var[KL]",
+    "noise_scale" : "NS",
+    "prior_scale" : "PS",
+    "dropout_rate" : "DR",
+    "regularization_scale" : "RS",
+    "sigma_0" : "\\sigma_0",
+    "learning_rate" : "LR",
+    "mean_error" : "E_{\\mu}",
+    "std_error" : "E_{\\sigma}",
+    "num_ensemble": "Ens",
+    "num_layers": "Depth",
+    "hidden_size": "Size",
+    "index_dim": "D_{index}",
+}
+
 
 agent_plot_params = {
     "ensemble": {
@@ -83,6 +113,42 @@ agent_plot_params = {
 }
 
 
+summary_select_agent_params = {
+    "ensemble": {
+        "noise_scale": [1.0],
+        "prior_scale": [1.0],
+        "num_layers": [2],
+        "hidden_size": [50],
+    },
+    "dropout": {
+        "dropout_rate": [0.05],
+        "regularization_scale": [1e-6],
+        "num_layers": [2],
+        "hidden_size": [50],
+    },
+    "hypermodel": {
+        "index_dim": [20],
+        "noise_scale": [1.0],
+        "prior_scale": [5.0],
+        "num_layers": [2],
+        "hidden_size": [50],
+    },
+    "bbb": {
+        "sigma_0": [1e2],
+        "learning_rate": [1e-3],
+        "num_layers": [2],
+        "hidden_size": [50],
+    },
+    "vnn": {
+        "activation": ["tanh"],
+        "activation_mode": ["mean+end"],
+        "global_std_mode": ["multiply"],
+        "num_layers": [2],
+        "hidden_size": [50],
+    },
+}
+
+
 def read_data(file):
     with open(file, "r") as f:
         lines = f.readlines()
@@ -102,16 +168,16 @@ def read_data(file):
 
             id = int(id)
             kl = float(kl)
-            agent = agent.split('=')[1]
+            agent = agent.split("=")[1]
 
             if agent not in agent_frames:
                 agent_frames[agent] = {"kl": []}
-            
+
             agent_frames[agent]["kl"].append(kl)
             # agent_frames[agent]["kl"].append(min(2, kl))
 
             for p in params:
-                k, v = p.split('=')
+                k, v = p.split("=")
 
                 if k in float_fields:
                     v = float(v)
@@ -119,19 +185,71 @@ def read_data(file):
                     v = int(v)
                 elif k in int_list_fields:
                     v = int(v.split("]")[0].split(" ")[-1])
-                
+
                 # if k == "num_batches":
                 #     v //= 1000
 
                 if k not in agent_frames[agent]:
                     agent_frames[agent][k] = []
-                
+
                 agent_frames[agent][k].append(v)
-        
+
         for agent in agent_frames.keys():
             agent_frames[agent] = DataFrame(agent_frames[agent])
 
         return agent_frames
+
+
+def create_tex_table(frame, agent, output_file_name):
+
+    global tex_template
+
+    tex_file = tex_template
+
+    fields = []
+    mode = []
+
+    to_describe = []
+
+    for key in frame.keys():
+        fields.append(field_tex_names[key])
+        mode.append('c')
+
+        if key not in to_describe:
+            to_describe.append(key)
+
+    fields = "    " + " & ".join(fields) + "\\\\ [0.5ex] \n        \\hline"
+    mode = "|" + " ".join(mode) + "|"
+    caption = ", ".join([str(field_tex_names[key]) + ":" + str(key).replace("_", " ") for key in to_describe])
+    
+    table = [fields]
+
+    for i in range(len(frame)):
+        line = []
+        for key in frame.keys():
+
+            val = frame[key][i]
+
+            if key in ["kl", "mean_error", "std_error"]:
+                val = "{:.4f}".format(val)
+
+            line.append(str(val))
+        
+        line = " & ".join(line) + " \\\\"
+        table.append(line)
+
+    table = "\n        ".join(table)
+
+    tex_file = (tex_file
+        .replace("<TITLE>", (agent + " in " + output_file_name).replace("_", " "))
+        .replace("<CAPTION>", caption)
+        .replace("<MODE>", mode)
+        .replace("<TABLE>", table)
+    )
+
+    with open("tex/" + output_file_name + ".tex", "w") as f:
+        f.write(tex_file)
+
 
 def plot_single_frame(frame, agent, output_file_name):
 
@@ -144,21 +262,33 @@ def plot_single_frame(frame, agent, output_file_name):
             point_aes_params[key] = params[key]
 
     plot = (
-        ggplot(frame) + aes(x=params["x"], y=params["y"]) +
-        facet_wrap(params["facet"], nrow=2, labeller="label_both") +
-        geom_hline(yintercept = 1) + 
-        ylim(0, 2) + 
-        geom_point(aes(**point_aes_params), size=3, position=position_dodge(width=0.8), stroke=0.2)
+        ggplot(frame)
+        + aes(x=params["x"], y=params["y"])
+        + facet_wrap(params["facet"], nrow=2, labeller="label_both")
+        + geom_hline(yintercept=1)
+        + ylim(0, 2)
+        + geom_point(
+            aes(**point_aes_params),
+            size=3,
+            position=position_dodge(width=0.8),
+            stroke=0.2,
+        )
     )
-    plot.save(output_file_name, dpi=600)
+    plot.save("plots/" + output_file_name + ".png", dpi=600)
+
+    create_tex_table(frame, agent, output_file_name)
+
 
 def plot_multiple_frames(frames, agent, output_file_name):
 
     params = agent_plot_params[agent]
-    
+
     result = frames[0].copy()
-    result[params["y"]]=sum(f[params["y"]] for f in frames)/ len(frames)
-    std = (sum((f[params["y"]] - result[params["y"]])**2 for f in frames) / len(frames))**0.5
+    result[params["y"]] = sum(f[params["y"]] for f in frames) / len(frames)
+    std = (
+        sum((f[params["y"]] - result[params["y"]]) ** 2 for f in frames)
+        / len(frames)
+    ) ** 0.5
     result[params["y"] + "_std"] = std
 
     point_aes_params = {}
@@ -170,18 +300,29 @@ def plot_multiple_frames(frames, agent, output_file_name):
     dodge = position_dodge(width=0.8)
 
     plot = (
-        ggplot(result) + aes(x=params["x"], y=params["y"]) +
-        facet_wrap(params["facet"], nrow=2, labeller="label_both") +
-        geom_hline(yintercept = 1) + 
-        ylim(0, 2) + 
-        geom_point(aes(**point_aes_params), size=3, position=position_dodge(width=0.8), stroke=0.2) +
-        geom_errorbar(aes(
-            **point_aes_params,
-            ymin=params["y"] + "-" + params["y"] + "_std",
-            ymax=params["y"] + "+" + params["y"] + "_std"
-        ), position=dodge, width=0.8)
+        ggplot(result)
+        + aes(x=params["x"], y=params["y"])
+        + facet_wrap(params["facet"], nrow=2, labeller="label_both")
+        + geom_hline(yintercept=1)
+        + ylim(0, 2)
+        + geom_point(
+            aes(**point_aes_params),
+            size=3,
+            position=position_dodge(width=0.8),
+            stroke=0.2,
+        )
+        + geom_errorbar(
+            aes(
+                **point_aes_params,
+                ymin=params["y"] + "-" + params["y"] + "_std",
+                ymax=params["y"] + "+" + params["y"] + "_std"
+            ),
+            position=dodge,
+            width=0.8,
+        )
     )
-    plot.save(output_file_name, dpi=600)
+    plot.save("plots/" + output_file_name + ".png", dpi=600)
+    create_tex_table(result, agent, output_file_name)
 
 
 def plot_all_single_frames(files):
@@ -189,41 +330,45 @@ def plot_all_single_frames(files):
     for file in files:
         agent_frames = read_data(file)
         for agent, frame in agent_frames.items():
-                
-            plot_single_frame(frame, agent, "enn_plot_" + agent + "_" + file.replace('.txt', '') + ".png")
+
+            plot_single_frame(
+                frame,
+                agent,
+                "enn_plot_" + agent + "_" + file.replace(".txt", ""),
+            )
 
 
 def plot_all_total_frames(files):
 
     all_agent_frames = {}
-    
+
     for file in files:
         agent_frames = read_data(file)
         for agent in agent_frames.keys():
             frame = agent_frames[agent]
-            
+
             if agent not in all_agent_frames:
                 all_agent_frames[agent] = []
-            
+
             all_agent_frames[agent].append(frame)
 
     for agent, frames in all_agent_frames.items():
         if len(frames) > 0:
-            plot_multiple_frames(frames, agent, "total_enn_plot_" + agent + ".png")
+            plot_multiple_frames(frames, agent, "total_enn_plot_" + agent)
 
 
 def plot_summary(files):
 
     all_agent_frames = {}
-    
+
     for file in files:
         agent_frames = read_data(file)
         for agent in agent_frames.keys():
             frame = agent_frames[agent]
-            
+
             if agent not in all_agent_frames:
                 all_agent_frames[agent] = []
-            
+
             all_agent_frames[agent].append(frame)
 
     data = {
@@ -232,11 +377,22 @@ def plot_summary(files):
         "std": [],
     }
 
-    for agent, frames in all_agent_frames.items():
-        
+    for agent, all_frames in all_agent_frames.items():
+
         params = agent_plot_params[agent]
-        mean = sum(sum(f[params["y"]]) for f in frames)/sum(len(f) for f in frames)
-        std = sum(sum((f[params["y"]]-mean)**2) for f in frames)/sum(len(f) for f in frames)
+        filters = summary_select_agent_params[agent]
+
+        frames = all_frames
+
+        for key, value in filters.items():
+            frames = [f[f[key].isin(value)] for f in frames]
+
+        mean = sum(sum(f[params["y"]]) for f in frames) / sum(
+            len(f) for f in frames
+        )
+        std = sum(sum((f[params["y"]] - mean) ** 2) for f in frames) / sum(
+            len(f) for f in frames
+        )
 
         data["agent"].append(agent)
         data["mean"].append(mean)
@@ -245,25 +401,27 @@ def plot_summary(files):
     frame = DataFrame(data)
 
     plot = (
-        ggplot(frame) + aes(x="agent", y="mean") +
-        geom_hline(yintercept = 1) + 
-        # ylim(0, 2) + 
-        scale_y_continuous(trans = "log10") +
-        geom_point(aes(colour="agent"), size=3, stroke=0.2) +
-        geom_errorbar(aes(
-            colour="agent",
-            ymin="mean-std",
-            ymax="mean+std"
-        ), width=0.8)
+        ggplot(frame)
+        + aes(x="agent", y="mean")
+        + geom_hline(yintercept=1)
+        +
+        # ylim(0, 2) +
+        scale_y_continuous(trans="log10")
+        + geom_point(aes(colour="agent"), size=3, stroke=0.2)
+        + geom_errorbar(
+            aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8
+        )
     )
-    plot.save("summary_enn_plot.png", dpi=600)
-    frame.to_csv("summary_enn.csv")
+    plot.save("plots/summary_enn_plot.png", dpi=600)
+    frame.to_csv("plots/summary_enn.csv")
 
 
 def parse_enn_experiment_parameters(file):
-    
+
     param_string = file.split("_")[-1]
-    input_dim, data_ratio, noise_std = re.findall(r'\d+(?:\.\d+|\d*)', param_string)
+    input_dim, data_ratio, noise_std = re.findall(
+        r"\d+(?:\.\d+|\d*)", param_string
+    )
 
     input_dim = int(input_dim)
     data_ratio = float(data_ratio)
@@ -276,10 +434,12 @@ def parse_enn_experiment_parameters(file):
     }
 
 
-def plot_all_hyperexperiment_frames(files, parse_experiment_parameters=parse_enn_experiment_parameters):
+def plot_all_hyperexperiment_frames(
+    files, parse_experiment_parameters=parse_enn_experiment_parameters
+):
 
     all_experiment_agent_frames = {}
-    
+
     for file in files:
         agent_frames = read_data(file)
         for agent in agent_frames.keys():
@@ -291,18 +451,28 @@ def plot_all_hyperexperiment_frames(files, parse_experiment_parameters=parse_enn
                 key = str(name) + ":" + str(value)
                 if key not in all_experiment_agent_frames:
                     all_experiment_agent_frames[key] = {}
-            
+
                 if agent not in all_experiment_agent_frames[key]:
                     all_experiment_agent_frames[key][agent] = []
-            
+
                 all_experiment_agent_frames[key][agent].append(frame)
 
-    for experiment_param, all_agent_frames in all_experiment_agent_frames.items(): 
+    for (
+        experiment_param,
+        all_agent_frames,
+    ) in all_experiment_agent_frames.items():
         for agent, frames in all_agent_frames.items():
             if len(frames) > 0:
-                plot_multiple_frames(frames, agent, "hyperexperiment_enn_plot_" + experiment_param + "_" + agent + ".png")
+                plot_multiple_frames(
+                    frames,
+                    agent,
+                    "hyperexperiment_enn_plot_"
+                    + experiment_param
+                    + "_"
+                    + agent,
+                )
 
 
 plot_summary(files)
-# plot_all_hyperexperiment_frames(files)
-# plot_all_single_frames(files)
+plot_all_hyperexperiment_frames(files)
+plot_all_single_frames(files)
