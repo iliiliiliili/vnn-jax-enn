@@ -24,7 +24,8 @@ with open(tex_template_file, "r") as f:
 
 # files = glob("results_vnn_selected*")
 # files = glob("results_id*")
-files = glob("results_all_old*")
+# files = glob("results_all_old*") + glob("results_vnn_selected*")
+files = glob("results_mserr*")
 
 float_fields = [
     "noise_scale",
@@ -41,6 +42,7 @@ int_fields = [
     "num_layers",
     "hidden_size",
     "index_dim",
+    "num_index_samples",
     # "num_batches",
 ]
 int_list_fields = [
@@ -49,7 +51,10 @@ int_list_fields = [
 
 field_tex_names = {
     "kl" : "KL",
+    "agent" : "Type",
+    "mean" : "Mean[KL]",
     "kl_std" : "Var[KL]",
+    "std" : "Var[KL]",
     "noise_scale" : "NS",
     "prior_scale" : "PS",
     "dropout_rate" : "DR",
@@ -62,6 +67,13 @@ field_tex_names = {
     "num_layers": "Depth",
     "hidden_size": "Size",
     "index_dim": "D_{index}",
+    "activation": "Act",
+    "activation_mode": "ActM",
+    "use_batch_norm": "BN",
+    "batch_norm_mode": "BNM",
+    "global_std_mode": "GStdM",
+    "num_batches": "Epochs",
+    "num_index_samples": "Samples",
 }
 
 
@@ -119,6 +131,7 @@ summary_select_agent_params = {
         "prior_scale": [1.0],
         "num_layers": [2],
         "hidden_size": [50],
+        "num_ensemble": [30],
     },
     "dropout": {
         "dropout_rate": [0.05],
@@ -141,11 +154,18 @@ summary_select_agent_params = {
     },
     "vnn": {
         "activation": ["tanh"],
-        "activation_mode": ["mean+end"],
+        "activation_mode": ["mean"],
         "global_std_mode": ["multiply"],
+        # "activation_mode": ["none"],
+        # "global_std_mode": ["none"],
         "num_layers": [2],
         "hidden_size": [50],
+        "num_index_samples": [10],
+        "num_batches": ["1000"],
     },
+    "layer_ensemble": {
+
+    }
 }
 
 
@@ -156,7 +176,7 @@ def read_data(file):
         agent_frames = {}
 
         for line in lines:
-            id, kl, agent, *params = line.replace("\n", "").split(" ")
+            id, kl, *params = line.replace("\n", "").split(" ")
 
             f = []
             for p in params:
@@ -164,11 +184,19 @@ def read_data(file):
                     f.append(p)
                 else:
                     f[-1] += " " + p
-            params = f
+            raw_params = f
+
+            params = []
+
+            for p in raw_params:
+                k, v = p.split("=")
+                if k == "agent":
+                    agent = v
+                else:
+                    params.append(p)
 
             id = int(id)
             kl = float(kl)
-            agent = agent.split("=")[1]
 
             if agent not in agent_frames:
                 agent_frames[agent] = {"kl": []}
@@ -230,7 +258,7 @@ def create_tex_table(frame, agent, output_file_name):
 
             val = frame[key][i]
 
-            if key in ["kl", "mean_error", "std_error"]:
+            if key in ["kl", "mean_error", "std_error", "kl_std"]:
                 val = "{:.4f}".format(val)
 
             line.append(str(val))
@@ -357,13 +385,41 @@ def plot_all_total_frames(files):
             plot_multiple_frames(frames, agent, "total_enn_plot_" + agent)
 
 
-def plot_summary(files):
+def parse_enn_experiment_parameters(file):
+
+    param_string = file.split("_")[-1]
+    input_dim, data_ratio, noise_std = re.findall(
+        r"\d+(?:\.\d+|\d*)", param_string
+    )
+
+    input_dim = int(input_dim)
+    data_ratio = float(data_ratio)
+    noise_std = float(noise_std)
+
+    return {
+        "input_dim": input_dim,
+        "data_ratio": data_ratio,
+        "noise_std": noise_std,
+    }
+
+
+def plot_summary(files, parse_experiment_parameters=parse_enn_experiment_parameters):
 
     all_agent_frames = {}
 
     for file in files:
         agent_frames = read_data(file)
+        experiment_params = parse_experiment_parameters(file)
+
+        if (experiment_params["input_dim"] not in [10, 100]):
+            print("scipping file", file, "due to input dim filter")
+            continue
+
         for agent in agent_frames.keys():
+
+            if agent in ["layer_ensemble"]: 
+                continue
+
             frame = agent_frames[agent]
 
             if agent not in all_agent_frames:
@@ -414,24 +470,7 @@ def plot_summary(files):
     )
     plot.save("plots/summary_enn_plot.png", dpi=600)
     frame.to_csv("plots/summary_enn.csv")
-
-
-def parse_enn_experiment_parameters(file):
-
-    param_string = file.split("_")[-1]
-    input_dim, data_ratio, noise_std = re.findall(
-        r"\d+(?:\.\d+|\d*)", param_string
-    )
-
-    input_dim = int(input_dim)
-    data_ratio = float(data_ratio)
-    noise_std = float(noise_std)
-
-    return {
-        "input_dim": input_dim,
-        "data_ratio": data_ratio,
-        "noise_std": noise_std,
-    }
+    create_tex_table(frame, "all", "summary_enn_plot")
 
 
 def plot_all_hyperexperiment_frames(
@@ -457,6 +496,15 @@ def plot_all_hyperexperiment_frames(
 
                 all_experiment_agent_frames[key][agent].append(frame)
 
+            key = "all"
+            if key not in all_experiment_agent_frames:
+                all_experiment_agent_frames[key] = {}
+
+            if agent not in all_experiment_agent_frames[key]:
+                all_experiment_agent_frames[key][agent] = []
+
+            all_experiment_agent_frames[key][agent].append(frame)
+
     for (
         experiment_param,
         all_agent_frames,
@@ -474,5 +522,5 @@ def plot_all_hyperexperiment_frames(
 
 
 plot_summary(files)
-plot_all_hyperexperiment_frames(files)
-plot_all_single_frames(files)
+# plot_all_hyperexperiment_frames(files)
+# plot_all_single_frames(files)
