@@ -435,7 +435,7 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
 
-    for activation in ["relu", "tanh"]:
+    for activation in ["lrelu", "relu", "tanh"]:
         for learning_rate in [1e-3, 1e-4, 5e-5]:
             for num_layers in [2, 3]:
                 for hidden_size in [50, 100]:
@@ -449,6 +449,7 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
                                         current_activation = {
                                             "relu": jax.nn.relu,
                                             "tanh": jax.nn.tanh,
+                                            "lrelu": jax.nn.leaky_relu,
                                         }[activation]
 
                                         if len(activation_mode.split("+")) > 1:
