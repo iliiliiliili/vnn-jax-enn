@@ -16,7 +16,7 @@
 # ============================================================================
 """A minimalist wrapper around ENN experiment for testbed submission."""
 
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from acme.utils import loggers
 import dataclasses
@@ -65,7 +65,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
     experiment: Optional[supervised.Experiment] = None
 
     def __call__(
-        self, data: testbed_base.Data, prior: testbed_base.PriorKnowledge,
+        self, data: testbed_base.Data, prior: testbed_base.PriorKnowledge, evaluate: Callable = None, log_file_name: str = None,
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         enn = self.config.enn_ctor(prior)
@@ -83,11 +83,36 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                 self.config.num_batches, log_freq=self.config.train_log_freq
             ),
             eval_datasets=self.eval_datasets,
-            eval_log_freq=logging_freq(
-                self.config.num_batches, log_freq=self.config.eval_log_freq
-            ),
+            eval_log_freq=20,
         )
-        self.experiment.train(self.config.num_batches)
+
+        def log_evaluate():
+            kl_quality = evaluate(extract_enn_sampler(self.experiment))
+            print(
+                f"kl_estimate={kl_quality.kl_estimate}"
+                + "mean_error="
+                + str(kl_quality.extra["mean_error"])
+                + " "
+                + "std_error="
+                + str(kl_quality.extra["std_error"])
+            )
+
+            with open(
+                log_file_name,
+                "a",
+            ) as f:
+
+                f.write(
+                    f"kl_estimate={kl_quality.kl_estimate}"
+                    + " mean_error="
+                    + str(kl_quality.extra["mean_error"])
+                    + " "
+                    + "std_error="
+                    + str(kl_quality.extra["std_error"])
+                    + "\n"
+                )
+
+        self.experiment.train(self.config.num_batches, None if evaluate is None else log_evaluate, log_file_name)
         return extract_enn_sampler(self.experiment)
 
 

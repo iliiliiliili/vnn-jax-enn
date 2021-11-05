@@ -431,6 +431,7 @@ def make_bbb_sweep() -> List[AgentCtorConfig]:
 
     return sweep
 
+
 def make_vnn_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
@@ -525,6 +526,55 @@ def make_vnn_selected_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
+def make_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    for activation in ["lrelu"]:
+        for learning_rate in [1e-3]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    for use_batch_norm in [False]:
+                        for num_batches in [1000, 3000]:
+                            for num_index_samples in [10, 100]:
+                                for activation_mode, global_std_mode in [
+                                    ("mean", "multiply"), ("mean+end", "multiply"),
+                                    ("mean+end", "replace"), ("none", "multiply"),
+                                    ("none", "none"),
+                                ]:
+
+                                    batch_norm_mode = activation_mode
+
+                                    current_activation = {
+                                        "lrelu": jax.nn.leaky_relu,
+                                        "relu": jax.nn.relu,
+                                        "tanh": jax.nn.tanh,
+                                    }[activation]
+
+                                    if len(activation_mode.split("+")) > 1:
+                                        current_activation = [current_activation] * len(activation_mode.split("+"))
+
+                                    settings = {
+                                        "agent": "vnn",
+                                        "activation": activation,
+                                        "learning_rate": learning_rate,
+                                        "num_layers": num_layers,
+                                        "hidden_size": hidden_size,
+                                        "activation_mode": activation_mode,
+                                        "batch_norm_mode": batch_norm_mode,
+                                        "use_batch_norm": use_batch_norm,
+                                        "global_std_mode": global_std_mode,
+                                        "num_batches": num_batches,
+                                        "num_index_samples": num_index_samples,
+                                    }
+                                    config_ctor = make_vnn_ctor(
+                                        current_activation, activation_mode, use_batch_norm, batch_norm_mode,
+                                        global_std_mode, num_index_samples, hidden_size, num_batches=num_batches
+                                    )
+                                    sweep.append(AgentCtorConfig(settings, config_ctor))
+    return sweep
+
+
 def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     if agent == "all":
@@ -555,6 +605,8 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
         agent_sweep = make_vnn_sweep()
     elif agent == "vnn_selected":
         agent_sweep = make_vnn_selected_sweep()
+    elif agent == "vnn_lrelu":
+        agent_sweep = make_lrelu_vnn_selected_sweep()
     elif agent == "layer_ensemble":
         agent_sweep = make_layer_ensemble_sweep()
     else:

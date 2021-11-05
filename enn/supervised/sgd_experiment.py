@@ -18,7 +18,7 @@
 """An standard experiment operating by SGD."""
 
 import functools
-from typing import Dict, NamedTuple, Optional, Tuple
+from typing import Callable, Dict, NamedTuple, Optional, Tuple
 
 from acme.utils import loggers
 from enn import base
@@ -98,7 +98,7 @@ class Experiment(supervised_base.BaseExperiment):
         self.logger = logger or loggers.make_default_logger("experiment", time_delta=0)
         self._train_log_freq = train_log_freq
 
-    def train(self, num_batches: int):
+    def train(self, num_batches: int, evaluate: Callable = None, log_file_name: str = None):
         """Train the ENN for num_batches."""
         for _ in range(num_batches):
             self.step += 1
@@ -112,6 +112,13 @@ class Experiment(supervised_base.BaseExperiment):
                     {"dataset": "train", "step": self.step, "sgd": True}
                 )
                 self.logger.write(loss_metrics)
+
+                if log_file_name is not None:
+                    with open(log_file_name, "a") as f:
+                        f.write("step=" + str(loss_metrics["step"]) + " loss=" + str(float(loss_metrics["loss"])) + "\n")
+
+            if evaluate is not None and self.step % self._eval_log_freq == 0:
+                evaluate()
 
             # Periodically evaluate the other datasets.
             if self._eval_datasets and self.step % self._eval_log_freq == 0:
