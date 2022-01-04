@@ -32,6 +32,21 @@ import jax.numpy as jnp
 Activation = Callable[[jnp.ndarray], jnp.ndarray]
 
 
+def create_initializer(name):
+    
+    if name == None:
+        return None
+    if name == "he_uniform":
+        return hk.initializers.VarianceScaling(2.0, "fan_in", "uniform")
+    if name == "he_normal":
+        return hk.initializers.VarianceScaling(2.0, "fan_in", "truncated_normal")
+    if name == "glorot_normal":
+        return hk.initializers.VarianceScaling(1.0, "fan_avg", "uniform")
+    if name == "glorot_uniform":
+        return hk.initializers.VarianceScaling(1.0, "fan_avg", "truncated_normal")
+
+    raise ValueError(str(name) + " is an unknown initializer name")
+
 class VariationalBase(hk.Module):
 
     GLOBAL_STD: float = 0
@@ -222,6 +237,9 @@ class VariationalLinear(VariationalBase):
             Literal["none"], Literal["replace"], Literal["multiply"]
         ] = "none",
         bias=True,
+        initializer: Union[
+            Literal["he_uniform"], Literal["he_normal"], Literal["glorot_normal"], Literal["glorot_uniform"], None
+        ] = None,
         **kwargs,
     ) -> None:
 
@@ -230,12 +248,14 @@ class VariationalLinear(VariationalBase):
         if use_batch_norm:
             bias = False
 
-        means = lambda: hk.Linear(out_features, with_bias=bias, **kwargs)
+        hk_initializer = create_initializer(initializer)
+
+        means = lambda: hk.Linear(out_features, with_bias=bias, w_init=hk_initializer, b_init=hk_initializer, **kwargs)
 
         if global_std_mode == "replace":
             stds = lambda: None
         else:
-            stds = lambda: hk.Linear(out_features, with_bias=bias, **kwargs)
+            stds = lambda: hk.Linear(out_features, with_bias=bias, w_init=hk_initializer, b_init=hk_initializer, **kwargs)
 
         super().build(
             means,
@@ -332,8 +352,9 @@ class MLPVariationalENN(base.EpistemicNetwork):
             Literal["none"], Literal["replace"], Literal["multiply"]
         ] = "none",
         seed: int = 0,
-        w_init: Optional[hk.initializers.Initializer] = None,
-        b_init: Optional[hk.initializers.Initializer] = None,
+        initializer: Union[
+            Literal["he_uniform"], Literal["he_normal"], Literal["glorot_normal"], Literal["glorot_uniform"], None
+        ] = None,
     ):
         def enn_fn(inputs: base.Array, full_index: base.Index) -> base.Output:
 
@@ -353,8 +374,7 @@ class MLPVariationalENN(base.EpistemicNetwork):
                     use_batch_norm,
                     batch_norm_mode,
                     global_std_mode=global_std_mode,
-                    w_init=w_init,
-                    b_init=b_init,
+                    initializer=initializer,
                 )(x, index)
 
             return x

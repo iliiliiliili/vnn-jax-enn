@@ -25,7 +25,7 @@ with open(tex_template_file, "r") as f:
 # files = glob("results_vnn_selected*")
 # files = glob("results_id*")
 # files = glob("results_all_old*") + glob("results_vnn_selected*")
-files = glob("results_mserr*")
+files = glob("results_mserr*") + glob("results_lrelu*")
 
 float_fields = [
     "noise_scale",
@@ -64,6 +64,7 @@ field_tex_names = {
     "mean_error" : "E_{\\mu}",
     "std_error" : "E_{\\sigma}",
     "num_ensemble": "Ens",
+    "num_ensembles": "Ens",
     "num_layers": "Depth",
     "hidden_size": "Size",
     "index_dim": "D_{index}",
@@ -115,6 +116,15 @@ agent_plot_params = {
         "shape": "factor(hidden_size)",
         "fill": "activation",
     },
+    "vnn_lrelu": {
+        "x": "num_batches",
+        "y": "kl",
+        "facet": ["activation_mode", "global_std_mode"],
+        # "facet": ["activation_mode", "global_std_mode", "num_index_samples"],
+        "colour": "factor(num_layers)",
+        "shape": "factor(hidden_size)",
+        "fill": "activation",
+    },
     "layer_ensemble": {
         "x": "num_ensembles",
         "y": "kl",
@@ -153,20 +163,39 @@ summary_select_agent_params = {
         "hidden_size": [50],
     },
     "vnn": {
-        "activation": ["tanh"],
+        "activation": ["relu", "tanh"],
+        # "activation_mode": ["mean"],
+        # "global_std_mode": ["multiply"],
+        "activation_mode": ["none"],
+        "global_std_mode": ["multiply"],
+        "num_layers": [3],
+        "hidden_size": [100],
+        "num_index_samples": [100],
+        "num_batches": ["1000"],
+    },
+    "vnn_lrelu": {
         "activation_mode": ["mean"],
         "global_std_mode": ["multiply"],
-        # "activation_mode": ["none"],
-        # "global_std_mode": ["none"],
         "num_layers": [2],
         "hidden_size": [50],
-        "num_index_samples": [10],
+        "num_index_samples": [100],
         "num_batches": ["1000"],
     },
     "layer_ensemble": {
 
     }
 }
+
+summary_input_dims = [
+    [1],
+    [10],
+    [100],
+    [1000],
+    [10, 100],
+    [10, 100, 1000],
+    [1, 10, 100],
+    [1, 10, 100, 1000]
+]
 
 
 def read_data(file):
@@ -188,6 +217,8 @@ def read_data(file):
 
             params = []
 
+            agent = None
+
             for p in raw_params:
                 k, v = p.split("=")
                 if k == "agent":
@@ -197,6 +228,9 @@ def read_data(file):
 
             id = int(id)
             kl = float(kl)
+
+            if "results_lrelu" in file:
+                agent += "_lrelu"
 
             if agent not in agent_frames:
                 agent_frames[agent] = {"kl": []}
@@ -403,7 +437,7 @@ def parse_enn_experiment_parameters(file):
     }
 
 
-def plot_summary(files, parse_experiment_parameters=parse_enn_experiment_parameters):
+def plot_summary_vnn(files, allowed_input_dims, parse_experiment_parameters=parse_enn_experiment_parameters):
 
     all_agent_frames = {}
 
@@ -411,7 +445,69 @@ def plot_summary(files, parse_experiment_parameters=parse_enn_experiment_paramet
         agent_frames = read_data(file)
         experiment_params = parse_experiment_parameters(file)
 
-        if (experiment_params["input_dim"] not in [10, 100]):
+        if (experiment_params["input_dim"] not in allowed_input_dims):
+            print("scipping file", file, "due to input dim filter")
+            continue
+
+        for agent in agent_frames.keys():
+
+            if agent not in ["vnn", "vnn_lrelu"]: 
+                continue
+
+            frame = agent_frames[agent]
+
+            if agent not in all_agent_frames:
+                all_agent_frames[agent] = []
+
+            all_agent_frames[agent].append(frame)
+
+    data = {
+        "agent": [],
+        "mean": [],
+        "std": [],
+    }
+
+    for agent, all_frames in all_agent_frames.items():
+
+        params = agent_plot_params[agent]
+        frames = all_frames
+
+        for id in range(len(frames[0])):
+
+            mean = sum(f[params["y"]][id] for f in frames) / len(frames)
+            std = sum((f[params["y"]][id] - mean) **2 for f in frames) / len(frames)
+            data["agent"].append(agent + str(id))
+            data["mean"].append(mean)
+            data["std"].append(std)
+
+    frame = DataFrame(data)
+
+    plot = (
+        ggplot(frame)
+        + aes(x="agent", y="mean")
+        + geom_hline(yintercept=1)
+        +
+        # ylim(0, 2) +
+        scale_y_continuous(trans="log10")
+        + geom_point(aes(colour="agent"), size=3, stroke=0.2)
+        + geom_errorbar(
+            aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8
+        )
+    )
+    plot.save("plots/summary_vnn_plot_id" + "_".join([str(a) for a in allowed_input_dims]) + ".png", dpi=600)
+    frame.to_csv("plots/summary_vnn_id" + "_".join([str(a) for a in allowed_input_dims]) + ".csv")
+    create_tex_table(frame, "all", "summary_vnn_plot_id" + "_".join([str(a) for a in allowed_input_dims]))
+
+
+def plot_summary(files, allowed_input_dims, parse_experiment_parameters=parse_enn_experiment_parameters):
+
+    all_agent_frames = {}
+
+    for file in files:
+        agent_frames = read_data(file)
+        experiment_params = parse_experiment_parameters(file)
+
+        if (experiment_params["input_dim"] not in allowed_input_dims):
             print("scipping file", file, "due to input dim filter")
             continue
 
@@ -468,9 +564,9 @@ def plot_summary(files, parse_experiment_parameters=parse_enn_experiment_paramet
             aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8
         )
     )
-    plot.save("plots/summary_enn_plot.png", dpi=600)
-    frame.to_csv("plots/summary_enn.csv")
-    create_tex_table(frame, "all", "summary_enn_plot")
+    plot.save("plots/summary_enn_plot_id" + "_".join([str(a) for a in allowed_input_dims]) + ".png", dpi=600)
+    frame.to_csv("plots/summary_enn_id" + "_".join([str(a) for a in allowed_input_dims]) + ".csv")
+    create_tex_table(frame, "all", "summary_enn_plot_id" + "_".join([str(a) for a in allowed_input_dims]))
 
 
 def plot_all_hyperexperiment_frames(
@@ -521,6 +617,9 @@ def plot_all_hyperexperiment_frames(
                 )
 
 
-plot_summary(files)
+# plot_summary_vnn(files, [10, 100, 1000])
+
+for ids in summary_input_dims:
+    plot_summary(files, ids)
 # plot_all_hyperexperiment_frames(files)
 # plot_all_single_frames(files)
