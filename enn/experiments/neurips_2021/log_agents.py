@@ -43,6 +43,7 @@ flags.DEFINE_enum(
         "vnn",
         "vnn_selected",
         "vnn_lrelu",
+        "vnn_lrelu_init",
         "layer_ensemble",
     ],
     "Which agent family.",

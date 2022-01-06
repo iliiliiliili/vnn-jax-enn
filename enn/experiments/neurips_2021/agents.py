@@ -83,8 +83,10 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                 self.config.num_batches, log_freq=self.config.train_log_freq
             ),
             eval_datasets=self.eval_datasets,
-            eval_log_freq=20,
+            eval_log_freq=100,
         )
+
+        self.best_kl = None
 
         def log_evaluate():
             kl_quality = evaluate(extract_enn_sampler(self.experiment))
@@ -96,6 +98,9 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                 + "std_error="
                 + str(kl_quality.extra["std_error"])
             )
+
+            if self.best_kl is None or self.best_kl.kl_estimate > kl_quality.kl_estimate:
+                self.best_kl = kl_quality
 
             with open(
                 log_file_name,
