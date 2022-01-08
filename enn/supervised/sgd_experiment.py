@@ -118,7 +118,8 @@ class Experiment(supervised_base.BaseExperiment):
                         f.write("step=" + str(loss_metrics["step"]) + " loss=" + str(float(loss_metrics["loss"])) + "\n")
 
             if evaluate is not None and self.step % self._eval_log_freq == 0:
-                evaluate()
+                if evaluate(): # KL started decreasing
+                    return
 
             # Periodically evaluate the other datasets.
             if self._eval_datasets and self.step % self._eval_log_freq == 0:

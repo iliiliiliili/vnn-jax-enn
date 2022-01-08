@@ -73,10 +73,11 @@ def gaussian_data(
     seed: int, num_train: int, input_dim: int, num_test: int
 ) -> Tuple[chex.Array, chex.Array]:
     """Generate Gaussian training and test data."""
-    train_key, test_key = jax.random.split(jax.random.PRNGKey(seed))
+    train_key, test_key, val_key = jax.random.split(jax.random.PRNGKey(seed), num=3)
     x_train = jax.random.normal(train_key, [num_train, input_dim])
     x_test = jax.random.normal(test_key, [num_test, input_dim])
-    return x_train, x_test
+    x_val = jax.random.normal(val_key, [num_test, input_dim])
+    return x_train, x_test, x_val
 
 
 @dataclasses.dataclass
@@ -99,7 +100,7 @@ def regression_load_from_config(
     config: RegressionTestbedConfig,
 ) -> testbed_base.TestbedProblem:
     """Loads regression problem from config."""
-    x_train, x_test = gaussian_data(
+    x_train, x_test, x_val = gaussian_data(
         seed=config.seed,
         num_train=config.num_train,
         input_dim=config.input_dim,
@@ -109,6 +110,7 @@ def regression_load_from_config(
         kernel_fn=config.kernel_ctor(config.input_dim),
         x_train=x_train,
         x_test=x_test,
+        x_val=x_val,
         tau=config.tau,
         noise_std=config.noise_std,
         seed=config.seed,

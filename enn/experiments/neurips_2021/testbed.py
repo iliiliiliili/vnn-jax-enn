@@ -38,6 +38,7 @@ class GPRegression:
         kernel_fn: nt_types.KernelFn,
         x_train: chex.Array,
         x_test: chex.Array,
+        x_val: chex.Array,
         tau: int = 1,
         noise_std: float = 1,
         seed: int = 1,
@@ -54,6 +55,7 @@ class GPRegression:
         self._input_dim = input_dim
         self._x_train = jnp.array(x_train)
         self._x_test = jnp.array(x_test)
+        self._x_val = jnp.array(x_val)
         self._num_train = num_train
         self._num_test_x_cache = num_test_x_cache
         self._noise_std = noise_std
@@ -76,13 +78,23 @@ class GPRegression:
         self._test_mean, self._test_cov = predict_fn(
             t=None, x_test=self._x_test, get="nngp", compute_cov=True
         )
+        self._val_mean, self._val_cov = predict_fn(
+            t=None, x_test=self._x_val, get="nngp", compute_cov=True
+        )
         self._test_cov += kernel_ridge * jnp.eye(num_test_x_cache)
+        self._val_cov += kernel_ridge * jnp.eye(num_test_x_cache)
         chex.assert_shape(self._test_mean, [num_test_x_cache, 1])
         chex.assert_shape(self._test_cov, [num_test_x_cache, num_test_x_cache])
+        chex.assert_shape(self._val_mean, [num_test_x_cache, 1])
+        chex.assert_shape(self._val_cov, [num_test_x_cache, num_test_x_cache])
 
     @property
     def x_test(self) -> chex.Array:
         return self._x_test
+
+    @property
+    def x_val(self) -> chex.Array:
+        return self._x_val
 
     @property
     def test_mean(self) -> chex.Array:
@@ -91,6 +103,14 @@ class GPRegression:
     @property
     def test_cov(self) -> chex.Array:
         return self._test_cov
+
+    @property
+    def val_mean(self) -> chex.Array:
+        return self._val_mean
+
+    @property
+    def val_cov(self) -> chex.Array:
+        return self._val_cov
 
     @property
     def train_data(self) -> testbed_base.Data:
@@ -139,14 +159,52 @@ class TestbedGPRegression(testbed_base.TestbedProblem):
         chex.assert_shape(kl_estimates, [num_test])
         kl_estimate = jnp.mean(kl_estimates)
 
-        l1mean = jnp.mean(jnp.abs((posterior_mean - enn_mean)/posterior_mean))
-        l1std = jnp.mean(jnp.abs((posterior_std - enn_std)/posterior_std))
+        error_mean = jnp.mean(jnp.abs((posterior_mean - enn_mean)/posterior_mean))
+        error_std = jnp.mean(jnp.abs((posterior_std - enn_std)/posterior_std))
 
         result = testbed_base.ENNQuality(
             kl_estimate,
             {
-                "mean_error": l1mean,
-                "std_error": l1std,
+                "mean_error": error_mean,
+                "std_error": error_std,
+            }
+        )
+
+        return result
+    
+    def evaluate_quality_val(
+        self, enn_sampler: testbed_base.EpistemicSampler
+    ) -> testbed_base.ENNQuality:
+        """Computes KL estimate on mean functions for tau=1 only."""
+        # Extract useful quantities from the gp sampler.
+        x_val = self.data_sampler.x_val
+        num_test = x_val.shape[0]
+        posterior_mean = self.data_sampler.test_mean[:, 0]
+        posterior_std = jnp.sqrt(jnp.diag(self.data_sampler.test_cov))
+        posterior_std += self.std_ridge
+
+        # Compute the mean and std of ENN posterior
+        batched_sampler = jax.jit(jax.vmap(enn_sampler, in_axes=[None, 0]))
+        enn_samples = batched_sampler(x_val, jnp.arange(self.num_enn_samples))
+        enn_samples = enn_samples[:, :, 0]
+        chex.assert_shape(enn_samples, [self.num_enn_samples, num_test])
+        enn_mean = jnp.mean(enn_samples, axis=0)
+        enn_std = jnp.std(enn_samples, axis=0) + self.std_ridge
+
+        # Compute the KL divergence between this and reference posterior
+        batched_kl = jax.jit(jax.vmap(_kl_gaussian))
+        kl_estimates = batched_kl(posterior_mean, posterior_std, enn_mean, enn_std)
+        chex.assert_shape(kl_estimates, [num_test])
+        kl_estimate = jnp.mean(kl_estimates)
+
+        error_mean = jnp.mean(jnp.abs((posterior_mean - enn_mean)/posterior_mean))
+        error_std = jnp.mean(jnp.abs((posterior_std - enn_std)/posterior_std))
+
+        result = testbed_base.ENNQuality(
+            kl_estimate,
+            {
+                "mean_error": error_mean,
+                "std_error": error_std,
             }
         )
 
