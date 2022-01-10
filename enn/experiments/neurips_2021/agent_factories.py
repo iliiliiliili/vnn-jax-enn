@@ -19,7 +19,7 @@
 from functools import reduce
 import jax
 from enn.networks.vnn import Activation
-from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 from acme.utils import loggers
 import dataclasses
@@ -171,7 +171,7 @@ def make_vnn_ctor(
     learning_rate: int = 1e-3,
     seed: int = 0,
     num_batches: int = 1000,
-    initializer: str = None,
+    initializer: Tuple[str, str] = (None, None),
     loss_function: float = "default",
     noise_scale: float = 1,
 ) -> ConfigCtor:
@@ -601,16 +601,15 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                         for num_batches in [1000]:
                             for num_index_samples in [100, 300]:
                                 for activation_mode, global_std_mode in [
-                                    ("mean", "multiply"), ("mean+end", "multiply"),
-                                    ("mean+end", "replace"), ("none", "multiply"),
-                                    ("none", "none"),
+                                    ("mean", "none"), ("mean+end", "none"),
+                                    ("mean+end", "replace"), ("none", "none"),
                                 ]:
                                     for initializer in [
-                                        "he_uniform",
-                                        "he_normal",
-                                        "glorot_normal",
-                                        "glorot_uniform",
-                                        None
+                                        (None, None),
+                                        ("he_uniform", "1"),
+                                        ("he_normal", "1"),
+                                        ("glorot_normal", "1"),
+                                        ("glorot_uniform", "1"),
                                     ]:
                                         for loss_function in [
                                             "gaussian",
@@ -629,7 +628,7 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                                 current_activation = [current_activation] * len(activation_mode.split("+"))
 
                                             settings = {
-                                                "agent": "vnn",
+                                                "agent": "vnn_init",
                                                 "activation": activation,
                                                 "learning_rate": learning_rate,
                                                 "num_layers": num_layers,
