@@ -67,6 +67,9 @@ FLAGS = flags.FLAGS
 
 def main(_):
 
+    for k in ["input_dim", "data_ratio", "noise_std", "experiment_group"]:
+        print("--" + str(k) + "=" + str(FLAGS.flag_values_dict()[k]))
+
     for input_dim in FLAGS.input_dim:
         for data_ratio in FLAGS.data_ratio:
             for noise_std in FLAGS.noise_std:
@@ -128,7 +131,7 @@ def main(_):
                     # kl_quality = agent.best_kl
                     print(
                         f"kl_estimate={kl_quality.kl_estimate}"
-                        + "mean_error="
+                        + " mean_error="
                         + str(kl_quality.extra["mean_error"])
                         + " "
                         + "std_error="

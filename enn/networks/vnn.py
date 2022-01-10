@@ -15,7 +15,16 @@
 # Implementation by Illia Oleksiienko
 """Implementing Variational Neural Network as an ENN in JAX."""
 
-from typing import Any, Callable, List, Literal, Optional, Sequence, Union
+from typing import (
+    Any,
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import chex
 from haiku._src.batch_norm import BatchNorm
@@ -32,20 +41,39 @@ import jax.numpy as jnp
 Activation = Callable[[jnp.ndarray], jnp.ndarray]
 
 
-def create_initializer(name):
-    
-    if name == None:
-        return None
-    if name == "he_uniform":
-        return hk.initializers.VarianceScaling(2.0, "fan_in", "uniform")
-    if name == "he_normal":
-        return hk.initializers.VarianceScaling(2.0, "fan_in", "truncated_normal")
-    if name == "glorot_normal":
-        return hk.initializers.VarianceScaling(1.0, "fan_avg", "uniform")
-    if name == "glorot_uniform":
-        return hk.initializers.VarianceScaling(1.0, "fan_avg", "truncated_normal")
+def create_initializer(names):
 
-    raise ValueError(str(name) + " is an unknown initializer name")
+    result = []
+
+    for name in names:
+
+        if name == None:
+            result.append((None, None))
+        if name == "he_uniform":
+            init = hk.initializers.VarianceScaling(2.0, "fan_in", "uniform")
+            result.append((init, init))
+        if name == "he_normal":
+            init = hk.initializers.VarianceScaling(
+                2.0, "fan_in", "truncated_normal"
+            )
+            result.append((init, init))
+        if name == "glorot_normal":
+            init = hk.initializers.VarianceScaling(1.0, "fan_avg", "uniform")
+            result.append((init, init))
+        if name == "glorot_uniform":
+            init = hk.initializers.VarianceScaling(
+                1.0, "fan_avg", "truncated_normal"
+            )
+            result.append((init, init))
+        if name == "1":
+            init = hk.initializers.Constant(1.0)
+            result.append((None, init))
+        if name == "2":
+            init = hk.initializers.Constant(2.0)
+            result.append((None, init))
+
+        raise ValueError(str(name) + " is an unknown initializer name")
+
 
 class VariationalBase(hk.Module):
 
@@ -169,14 +197,10 @@ class VariationalBase(hk.Module):
                     ]
 
                 if target == "mean":
-                    means = hk.Sequential(
-                        [means, current_activation]
-                    )
+                    means = hk.Sequential([means, current_activation])
                 elif target == "std":
                     if stds is not None:
-                        stds = hk.Sequential(
-                            [stds, current_activation,]
-                        )
+                        stds = hk.Sequential([stds, current_activation,])
                 elif target == "end":
                     end_activation = current_activation
                 elif target == "none":
@@ -237,9 +261,24 @@ class VariationalLinear(VariationalBase):
             Literal["none"], Literal["replace"], Literal["multiply"]
         ] = "none",
         bias=True,
-        initializer: Union[
-            Literal["he_uniform"], Literal["he_normal"], Literal["glorot_normal"], Literal["glorot_uniform"], None
-        ] = None,
+        initializer: Tuple[
+            Union[
+                Literal["he_uniform"],
+                Literal["he_normal"],
+                Literal["glorot_normal"],
+                Literal["glorot_uniform"],
+                None,
+            ],
+            Union[
+                Literal["1"],
+                Literal["2"],
+                Literal["he_uniform"],
+                Literal["he_normal"],
+                Literal["glorot_normal"],
+                Literal["glorot_uniform"],
+                None,
+            ],
+        ] = (None, None),
         **kwargs,
     ) -> None:
 
@@ -248,14 +287,26 @@ class VariationalLinear(VariationalBase):
         if use_batch_norm:
             bias = False
 
-        hk_initializer = create_initializer(initializer)
+        initializers_mean, initializers_std = create_initializer(initializer)
 
-        means = lambda: hk.Linear(out_features, with_bias=bias, w_init=hk_initializer, b_init=hk_initializer, **kwargs)
+        means = lambda: hk.Linear(
+            out_features,
+            with_bias=bias,
+            w_init=initializers_mean[0],
+            b_init=initializers_mean[1],
+            **kwargs,
+        )
 
         if global_std_mode == "replace":
             stds = lambda: None
         else:
-            stds = lambda: hk.Linear(out_features, with_bias=bias, w_init=hk_initializer, b_init=hk_initializer, **kwargs)
+            stds = lambda: hk.Linear(
+                out_features,
+                with_bias=bias,
+                w_init=initializers_std[0],
+                b_init=initializers_std[1],
+                **kwargs,
+            )
 
         super().build(
             means,
@@ -352,9 +403,24 @@ class MLPVariationalENN(base.EpistemicNetwork):
             Literal["none"], Literal["replace"], Literal["multiply"]
         ] = "none",
         seed: int = 0,
-        initializer: Union[
-            Literal["he_uniform"], Literal["he_normal"], Literal["glorot_normal"], Literal["glorot_uniform"], None
-        ] = None,
+        initializer: Tuple[
+            Union[
+                Literal["he_uniform"],
+                Literal["he_normal"],
+                Literal["glorot_normal"],
+                Literal["glorot_uniform"],
+                None,
+            ],
+            Union[
+                Literal["1"],
+                Literal["2"],
+                Literal["he_uniform"],
+                Literal["he_normal"],
+                Literal["glorot_normal"],
+                Literal["glorot_uniform"],
+                None,
+            ],
+        ] = (None, None),
     ):
         def enn_fn(inputs: base.Array, full_index: base.Index) -> base.Output:
 
