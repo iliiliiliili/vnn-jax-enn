@@ -61,13 +61,12 @@ def main(_):
         else sweep[FLAGS.agent_id_start : FLAGS.agent_id_end]
     )
 
-    for i, agent_config in enumerate(sweep):
+    with open("agents_" + FLAGS.agent + ".txt", "w") as f:
+        for i, agent_config in enumerate(sweep):
 
-        agent_id = FLAGS.agent_id_start + i
+            agent_id = FLAGS.agent_id_start + i
 
-        print("agent_id", agent_id, "of", len(sweep))
-
-        with open("agents_" + FLAGS.agent + ".txt", "a",) as f:
+            print("agent_id", agent_id, "of", len(sweep))
 
             f.write(
                 "agent_id=" + str(agent_id) + " " +
