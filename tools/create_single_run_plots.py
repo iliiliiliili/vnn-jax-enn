@@ -20,7 +20,7 @@ import numpy as np
 import os
 
 # files = glob("single_run_*")
-files = glob("single_run_test_single_vnn_lrelu_init*")
+files = glob("single_run_init_std_1_*")
 
 float_fields = [
     "loss",
