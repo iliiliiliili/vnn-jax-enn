@@ -25,7 +25,8 @@ with open(tex_template_file, "r") as f:
 # files = glob("results_vnn_selected*")
 # files = glob("results_id*")
 # files = glob("results_all_old*") + glob("results_vnn_selected*")
-files = glob("results_mserr*") + glob("results_lrelu*")
+# files = glob("results_mserr*") + glob("results_lrelu*")
+files = glob("results_init_std_1*")
 
 float_fields = [
     "noise_scale",

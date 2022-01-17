@@ -605,11 +605,11 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                     ("mean+end", "replace"), ("none", "none"),
                                 ]:
                                     for initializer in [
-                                        (None, None),
-                                        ("he_uniform", "1"),
-                                        ("he_normal", "1"),
-                                        ("glorot_normal", "1"),
-                                        ("glorot_uniform", "1"),
+                                        [None, None],
+                                        ["he_uniform", "1"],
+                                        ["he_normal", "1"],
+                                        ["glorot_normal", "1"],
+                                        ["glorot_uniform", "1"],
                                     ]:
                                         for loss_function in [
                                             "gaussian",
@@ -639,7 +639,7 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                                 "global_std_mode": global_std_mode,
                                                 "num_batches": num_batches,
                                                 "num_index_samples": num_index_samples,
-                                                "initializer": initializer,
+                                                "initializer": "+".join(map(str, initializer)),
                                                 "loss_function": loss_function,
                                             }
                                             config_ctor = make_vnn_ctor(

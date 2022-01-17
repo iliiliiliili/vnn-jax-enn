@@ -49,30 +49,32 @@ def create_initializer(names):
 
         if name == None:
             result.append((None, None))
-        if name == "he_uniform":
+        elif name == "he_uniform":
             init = hk.initializers.VarianceScaling(2.0, "fan_in", "uniform")
             result.append((init, init))
-        if name == "he_normal":
+        elif name == "he_normal":
             init = hk.initializers.VarianceScaling(
                 2.0, "fan_in", "truncated_normal"
             )
             result.append((init, init))
-        if name == "glorot_normal":
+        elif name == "glorot_normal":
             init = hk.initializers.VarianceScaling(1.0, "fan_avg", "uniform")
             result.append((init, init))
-        if name == "glorot_uniform":
+        elif name == "glorot_uniform":
             init = hk.initializers.VarianceScaling(
                 1.0, "fan_avg", "truncated_normal"
             )
             result.append((init, init))
-        if name == "1":
+        elif name == "1":
             init = hk.initializers.Constant(1.0)
             result.append((None, init))
-        if name == "2":
+        elif name == "2":
             init = hk.initializers.Constant(2.0)
             result.append((None, init))
+        else:
+            raise ValueError(str(name) + " is an unknown initializer name")
 
-        raise ValueError(str(name) + " is an unknown initializer name")
+    return result
 
 
 class VariationalBase(hk.Module):
