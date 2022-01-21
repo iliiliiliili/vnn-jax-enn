@@ -9,6 +9,8 @@ from plotnine import (
     geom_hline,
     position_dodge,
     geom_errorbar,
+    theme,
+    element_text,
 )
 from plotnine.data import economics
 from pandas import DataFrame
@@ -76,6 +78,8 @@ field_tex_names = {
     "global_std_mode": "GStdM",
     "num_batches": "Epochs",
     "num_index_samples": "Samples",
+    "initializer": "Init",
+    "loss_function": "L_{f}",
 }
 
 
@@ -125,6 +129,14 @@ agent_plot_params = {
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
         "fill": "activation",
+    },
+    "vnn_init": {
+        "x": "num_batches",
+        "y": "kl",
+        "facet": ["activation_mode", "global_std_mode", "loss_function"],
+        "colour": "activation",
+        "shape": "factor(hidden_size)",
+        "fill": "initializer",
     },
     "layer_ensemble": {
         "x": "num_ensembles",
@@ -181,6 +193,16 @@ summary_select_agent_params = {
         "hidden_size": [50],
         "num_index_samples": [100],
         "num_batches": ["1000"],
+    },
+    "vnn_init": {
+        "activation_mode": ["mean"],
+        "global_std_mode": ["none"],
+        "num_layers": [2],
+        "hidden_size": [50],
+        "num_index_samples": [100],
+        "num_batches": ["1000"],
+        "initializer": ["glorot_normal+1"],
+        "loss_function": ["gaussian"],
     },
     "layer_ensemble": {
 
@@ -337,6 +359,10 @@ def plot_single_frame(frame, agent, output_file_name):
             stroke=0.2,
         )
     )
+
+    if len(params["facet"]) > 2:
+        plot = plot + theme(strip_text_x=element_text(size=5))
+
     plot.save("plots/" + output_file_name + ".png", dpi=600)
 
     create_tex_table(frame, agent, output_file_name)
@@ -384,6 +410,10 @@ def plot_multiple_frames(frames, agent, output_file_name):
             width=0.8,
         )
     )
+
+    if len(params["facet"]) > 2:
+        plot = plot + theme(strip_text_x=element_text(size=5))
+
     plot.save("plots/" + output_file_name + ".png", dpi=600)
     create_tex_table(result, agent, output_file_name)
 
@@ -622,5 +652,5 @@ def plot_all_hyperexperiment_frames(
 
 for ids in summary_input_dims:
     plot_summary(files, ids)
-# plot_all_hyperexperiment_frames(files)
-# plot_all_single_frames(files)
+plot_all_hyperexperiment_frames(files)
+plot_all_single_frames(files)
