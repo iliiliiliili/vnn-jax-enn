@@ -23,6 +23,7 @@ from enn.experiments.neurips_2021 import agent_factories
 from enn.experiments.neurips_2021 import agents
 from enn.experiments.neurips_2021 import load
 from jax.config import config
+import os
 
 # Double-precision in JAX helps with numerical stability
 config.update("jax_enable_x64", True)
@@ -66,6 +67,8 @@ FLAGS = flags.FLAGS
 
 
 def main(_):
+
+    os.makedirs("results", exist_ok=True)
 
     for k in ["input_dim", "data_ratio", "noise_std", "experiment_group"]:
         print("--" + str(k) + "=" + str(FLAGS.flag_values_dict()[k]))
@@ -140,7 +143,7 @@ def main(_):
                     all_results.append(kl_quality)
 
                     with open(
-                        "results_"
+                        "results/results_"
                         + FLAGS.experiment_group
                         + ("_" if len(FLAGS.experiment_group) > 0 else "")
                         + FLAGS.agent
