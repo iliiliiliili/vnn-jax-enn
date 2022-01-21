@@ -174,6 +174,7 @@ def make_vnn_ctor(
     initializer: Tuple[str, str] = (None, None),
     loss_function: float = "default",
     noise_scale: float = 1,
+    sigma_0 = 100,
 ) -> ConfigCtor:
     """Generate a dropout agent config."""
 
@@ -209,6 +210,10 @@ def make_vnn_ctor(
         elif loss_function == "gaussian":
             loss_ctor = enn_losses.gaussian_regression_loss(
                 num_index_samples, noise_scale, l2_weight_decay=0
+            )
+        elif loss_function == "nelbo":
+            loss_ctor = enn_losses.bbb_loss(
+                sigma_0=sigma_0, num_index_samples=num_index_samples
             )
         else:
             raise ValueError(loss_function + "is an unknown loss_function")
@@ -612,6 +617,7 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                         ["glorot_uniform", "1"],
                                     ]:
                                         for loss_function in [
+                                            "nelbo",
                                             "gaussian",
                                             "default",
                                         ]:
