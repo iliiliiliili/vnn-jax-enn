@@ -612,12 +612,12 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                     for initializer in [
                                         [None, None],
                                         ["he_uniform", "1"],
-                                        ["he_normal", "1"],
+                                        # ["he_normal", "1"],
                                         ["glorot_normal", "1"],
-                                        ["glorot_uniform", "1"],
+                                        # ["glorot_uniform", "1"],
                                     ]:
                                         for loss_function in [
-                                            "nelbo",
+                                            # "nelbo",
                                             "gaussian",
                                             "default",
                                         ]:
