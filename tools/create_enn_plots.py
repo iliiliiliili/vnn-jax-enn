@@ -11,9 +11,12 @@ from plotnine import (
     geom_errorbar,
     theme,
     element_text,
+    ylab,
+    xlab,
+    scale_color_discrete,
 )
 from plotnine.data import economics
-from pandas import DataFrame
+from pandas import Categorical, DataFrame
 from plotnine.scales.limits import ylim
 from plotnine.scales.scale_xy import scale_x_discrete
 from glob import glob
@@ -28,7 +31,7 @@ with open(tex_template_file, "r") as f:
 # files = glob("results_id*")
 # files = glob("results_all_old*") + glob("results_vnn_selected*")
 # files = glob("results_mserr*") + glob("results_lrelu*")
-files = glob("results_init_std_1*")
+files = glob("results/results_best_selected_val_*") + glob("results/results_mserr*")
 
 float_fields = [
     "noise_scale",
@@ -54,6 +57,7 @@ int_list_fields = [
 
 field_tex_names = {
     "kl" : "KL",
+    "kl_variance" : "Var[KL|seed]",
     "agent" : "Type",
     "mean" : "Mean[KL]",
     "kl_std" : "Var[KL]",
@@ -186,38 +190,38 @@ summary_select_agent_params = {
         "num_index_samples": [100],
         "num_batches": ["1000"],
     },
-    "vnn_lrelu": {
-        "activation_mode": ["mean"],
-        "global_std_mode": ["multiply"],
-        "num_layers": [2],
-        "hidden_size": [50],
-        "num_index_samples": [100],
-        "num_batches": ["1000"],
-    },
-    "vnn_init": {
-        "activation_mode": ["mean"],
-        "global_std_mode": ["none"],
-        "num_layers": [2],
-        "hidden_size": [50],
-        "num_index_samples": [100],
-        "num_batches": ["1000"],
-        "initializer": ["glorot_normal+1"],
-        "loss_function": ["gaussian"],
-    },
-    "layer_ensemble": {
+    # "vnn_lrelu": {
+    #     "activation_mode": ["mean"],
+    #     "global_std_mode": ["multiply"],
+    #     "num_layers": [2],
+    #     "hidden_size": [50],
+    #     "num_index_samples": [100],
+    #     "num_batches": ["1000"],
+    # },
+    # "vnn_init": {
+    #     "activation_mode": ["mean"],
+    #     "global_std_mode": ["none", "multiply"],
+    #     "num_layers": [2],
+    #     "hidden_size": [50],
+    #     "num_index_samples": [100],
+    #     "num_batches": ["1000"],
+    #     "initializer": ["glorot_normal+1"],
+    #     "loss_function": ["gaussian"],
+    # },
+    # "layer_ensemble": {
 
-    }
+    # }
 }
 
 summary_input_dims = [
-    [1],
-    [10],
-    [100],
+    # [1],
+    # [10],
+    # [100],
     [1000],
-    [10, 100],
+    # [10, 100],
     [10, 100, 1000],
-    [1, 10, 100],
-    [1, 10, 100, 1000]
+    # [1, 10, 100],
+    # [1, 10, 100, 1000]
 ]
 
 
@@ -427,7 +431,7 @@ def plot_all_single_frames(files):
             plot_single_frame(
                 frame,
                 agent,
-                "enn_plot_" + agent + "_" + file.replace(".txt", ""),
+                "enn_plot_" + agent + "_" + file.replace(".txt", "").replace("results/", ""),
             )
 
 
@@ -562,13 +566,21 @@ def plot_summary(files, allowed_input_dims, parse_experiment_parameters=parse_en
 
     for agent, all_frames in all_agent_frames.items():
 
+        if agent not in summary_select_agent_params:
+            print(f"Skippng agent {agent} due to summary_select_agent_params filter")
+            continue
+
         params = agent_plot_params[agent]
         filters = summary_select_agent_params[agent]
 
         frames = all_frames
+        old_frames=None
 
         for key, value in filters.items():
+            old_frames = frames
             frames = [f[f[key].isin(value)] for f in frames]
+            if len(frames[0]) <= 0:
+                raise ValueError("Empty frame after filtering")
 
         mean = sum(sum(f[params["y"]]) for f in frames) / sum(
             len(f) for f in frames
@@ -579,9 +591,10 @@ def plot_summary(files, allowed_input_dims, parse_experiment_parameters=parse_en
 
         data["agent"].append(agent)
         data["mean"].append(mean)
-        data["std"].append(std)
+        data["std"].append(min(4, std))
 
     frame = DataFrame(data)
+    frame["agent"] = Categorical(frame["agent"], ["dropout", "bbb", "vnn", "hypermodel", "ensemble"])
 
     plot = (
         ggplot(frame)
@@ -594,6 +607,9 @@ def plot_summary(files, allowed_input_dims, parse_experiment_parameters=parse_en
         + geom_errorbar(
             aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8
         )
+        + scale_color_discrete(guide=False)
+        + ylab("Mean KL")
+        + xlab("Agent") 
     )
     plot.save("plots/summary_enn_plot_id" + "_".join([str(a) for a in allowed_input_dims]) + ".png", dpi=600)
     frame.to_csv("plots/summary_enn_id" + "_".join([str(a) for a in allowed_input_dims]) + ".csv")
@@ -652,5 +668,5 @@ def plot_all_hyperexperiment_frames(
 
 for ids in summary_input_dims:
     plot_summary(files, ids)
-plot_all_hyperexperiment_frames(files)
-plot_all_single_frames(files)
+# plot_all_hyperexperiment_frames(files)
+# plot_all_single_frames(files)
