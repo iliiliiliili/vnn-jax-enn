@@ -603,13 +603,16 @@ def plot_summary(files, allowed_input_dims, parse_experiment_parameters=parse_en
         +
         # ylim(0, 2) +
         scale_y_continuous(trans="log10")
-        + geom_point(aes(colour="agent"), size=3, stroke=0.2)
+        + geom_point(aes(colour="agent"), size=4, stroke=0.2)
         + geom_errorbar(
-            aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8
+            aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8, size=1.5,
+        )
+        + theme(
+            axis_title=element_text(size=15), axis_text=element_text(size=14)
         )
         + scale_color_discrete(guide=False)
         + ylab("Mean KL")
-        + xlab("Agent") 
+        + xlab("Method") 
     )
     plot.save("plots/summary_enn_plot_id" + "_".join([str(a) for a in allowed_input_dims]) + ".png", dpi=600)
     frame.to_csv("plots/summary_enn_id" + "_".join([str(a) for a in allowed_input_dims]) + ".csv")
