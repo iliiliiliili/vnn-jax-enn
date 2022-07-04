@@ -25,19 +25,22 @@ import numpy as np
 
 
 class IndexersTest(parameterized.TestCase):
+    @parameterized.parameters(
+        [
+            [indexers.GaussianWithUnitIndexer(10)],
+            [indexers.EnsembleIndexer(5)],
+            [indexers.PrngIndexer()],
+            [indexers.ScaledGaussianIndexer(7)],
+            [indexers.DirichletIndexer(np.ones(3))],
+        ]
+    )
+    def test_index_forward(self, indexer: base.EpistemicIndexer):
+        key = jax.random.PRNGKey(777)
+        jit_indexer = jax.jit(
+            lambda x: indexer(x)
+        )  # pylint: disable=unnecessary-lambda
+        assert np.allclose(indexer(key), jit_indexer(key))
 
-  @parameterized.parameters([
-      [indexers.GaussianWithUnitIndexer(10)],
-      [indexers.EnsembleIndexer(5)],
-      [indexers.PrngIndexer()],
-      [indexers.ScaledGaussianIndexer(7)],
-      [indexers.DirichletIndexer(np.ones(3))],
-  ])
-  def test_index_forward(self, indexer: base.EpistemicIndexer):
-    key = jax.random.PRNGKey(777)
-    jit_indexer = jax.jit(lambda x: indexer(x))  # pylint: disable=unnecessary-lambda
-    assert np.allclose(indexer(key), jit_indexer(key))
 
-
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

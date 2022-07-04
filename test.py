@@ -1,9 +1,9 @@
 import warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 
-#@title Development imports
+# @title Development imports
 from typing import Callable, NamedTuple
 
 import numpy as np
@@ -32,23 +32,24 @@ from enn.supervised import regression_data
 
 @dataclasses.dataclass
 class Config:
-  num_batch: int = 1_000
-  index_dim: int = 10
-  num_index_samples: int = 10
-  seed: int = 0
-  prior_scale: float = 5.
-  learning_rate: float = 1e-3
-  noise_std: float = 0.1
+    num_batch: int = 1_000
+    index_dim: int = 10
+    num_index_samples: int = 10
+    seed: int = 0
+    prior_scale: float = 5.0
+    learning_rate: float = 1e-3
+    noise_std: float = 0.1
+
 
 FLAGS = Config()
 
-#@title Create the experiment
+# @title Create the experiment
 
 # Dataset
 dataset = regression_data.make_dataset()
 
 # Logger
-logger = TerminalLogger('supervised_regression')
+logger = TerminalLogger("supervised_regression")
 
 # ENN
 enn = networks.MLPEnsembleMatchedPrior(
@@ -61,16 +62,17 @@ enn = networks.MLPEnsembleMatchedPrior(
 
 # Loss
 noise_fn = data_noise.GaussianTargetNoise(enn, FLAGS.noise_std, FLAGS.seed)
-single_loss =  losses.add_data_noise(losses.L2Loss(), noise_fn)
+single_loss = losses.add_data_noise(losses.L2Loss(), noise_fn)
 loss_fn = losses.average_single_index_loss(single_loss, FLAGS.num_index_samples)
- 
+
 # Optimizer
 optimizer = optax.adam(FLAGS.learning_rate)
 
 experiment = supervised.Experiment(
-    enn, loss_fn, optimizer, dataset, FLAGS.seed, logger=logger)
+    enn, loss_fn, optimizer, dataset, FLAGS.seed, logger=logger
+)
 
-    
+
 experiment.train(FLAGS.num_batch)
 
 p = regression_data.make_plot(experiment)

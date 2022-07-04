@@ -26,26 +26,22 @@ from enn.networks import einsum_mlp
 
 
 class EinsumMlpTest(parameterized.TestCase):
-
-  @parameterized.parameters([
-      ([], 1, True), ([10, 10], 5, True), ([], 1, False), ([10, 10], 5, False),
-  ])
-  def test_ensemble(self,
-                    hiddens: List[int],
-                    num_ensemble: int,
-                    regression: bool):
-    """Simple test to run just 10 batches."""
-    test_experiment = supervised.make_test_experiment(regression)
-
-    enn = einsum_mlp.make_ensemble_mlp_with_prior_enn(
-        output_sizes=hiddens+[test_experiment.num_outputs],
-        dummy_input=test_experiment.dummy_input,
-        num_ensemble=num_ensemble,
-        prior_scale=1.,
+    @parameterized.parameters(
+        [([], 1, True), ([10, 10], 5, True), ([], 1, False), ([10, 10], 5, False),]
     )
-    experiment = test_experiment.experiment_ctor(enn)
-    experiment.train(10)
+    def test_ensemble(self, hiddens: List[int], num_ensemble: int, regression: bool):
+        """Simple test to run just 10 batches."""
+        test_experiment = supervised.make_test_experiment(regression)
+
+        enn = einsum_mlp.make_ensemble_mlp_with_prior_enn(
+            output_sizes=hiddens + [test_experiment.num_outputs],
+            dummy_input=test_experiment.dummy_input,
+            num_ensemble=num_ensemble,
+            prior_scale=1.0,
+        )
+        experiment = test_experiment.experiment_ctor(enn)
+        experiment.train(10)
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

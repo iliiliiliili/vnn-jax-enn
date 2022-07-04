@@ -25,25 +25,24 @@ from enn.networks import gaussian_enn
 
 
 class GaussianEnnTest(parameterized.TestCase):
-
-  @parameterized.parameters([
-      ([], 1., True), ([10, 10], 0.1, True),
-      ([], 1., False), ([10, 10], 0.1, False),
-  ])
-  def test_ten_batches(self,
-                       hiddens: List[int],
-                       init_scale: float,
-                       regression: bool):
-    """Simple test to run just 10 batches."""
-    test_experiment = supervised.make_test_experiment(regression)
-
-    enn = gaussian_enn.GaussianNoiseMLP(
-        output_sizes=hiddens+[test_experiment.num_outputs],
-        init_scale=init_scale,
+    @parameterized.parameters(
+        [
+            ([], 1.0, True),
+            ([10, 10], 0.1, True),
+            ([], 1.0, False),
+            ([10, 10], 0.1, False),
+        ]
     )
-    experiment = test_experiment.experiment_ctor(enn)
-    experiment.train(10)
+    def test_ten_batches(self, hiddens: List[int], init_scale: float, regression: bool):
+        """Simple test to run just 10 batches."""
+        test_experiment = supervised.make_test_experiment(regression)
+
+        enn = gaussian_enn.GaussianNoiseMLP(
+            output_sizes=hiddens + [test_experiment.num_outputs], init_scale=init_scale,
+        )
+        experiment = test_experiment.experiment_ctor(enn)
+        experiment.train(10)
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

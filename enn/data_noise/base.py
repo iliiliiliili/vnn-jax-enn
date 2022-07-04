@@ -21,12 +21,11 @@ import typing_extensions
 
 
 class DataNoise(typing_extensions.Protocol):
-
-  def __call__(self, data: base.Batch, index: base.Index) -> base.Batch:
-    """Apply some noise process to a batch of data based on epistemic index."""
+    def __call__(self, data: base.Batch, index: base.Index) -> base.Batch:
+        """Apply some noise process to a batch of data based on epistemic index."""
 
 
 def get_indexer(indexer: base.EpistemicIndexer):
-  while hasattr(indexer, 'indexer'):
-    indexer = indexer.indexer
-  return indexer
+    while hasattr(indexer, "indexer"):
+        indexer = indexer.indexer
+    return indexer

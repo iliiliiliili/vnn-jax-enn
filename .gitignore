@@ -11,3 +11,9 @@ pyvenv.cfg
 __pycache__
 *.png
 *.egg-info
+*.txt
+*.csv
+tex/*
+
+*.sh
+screenlog.*

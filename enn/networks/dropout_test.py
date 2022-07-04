@@ -24,24 +24,29 @@ from enn.networks import dropout
 
 
 class NetworkTest(parameterized.TestCase):
-
-  @parameterized.product(
-      hiddens=[[], [10, 10]],
-      dropout_rate=[0.05, 0.2, 0.5],
-      dropout_input=[True, False],
-      regression=[True, False])
-  def test_dropout_mlp(self, hiddens: Sequence[int], dropout_rate: float,
-                       dropout_input: bool, regression: bool):
-    """Simple test to run just 10 batches."""
-    test_experiment = supervised.make_test_experiment(regression)
-    enn = dropout.MLPDropoutENN(
-        output_sizes=list(hiddens)+[test_experiment.num_outputs],
-        dropout_rate=dropout_rate,
-        dropout_input=dropout_input
+    @parameterized.product(
+        hiddens=[[], [10, 10]],
+        dropout_rate=[0.05, 0.2, 0.5],
+        dropout_input=[True, False],
+        regression=[True, False],
     )
-    experiment = test_experiment.experiment_ctor(enn)
-    experiment.train(10)
+    def test_dropout_mlp(
+        self,
+        hiddens: Sequence[int],
+        dropout_rate: float,
+        dropout_input: bool,
+        regression: bool,
+    ):
+        """Simple test to run just 10 batches."""
+        test_experiment = supervised.make_test_experiment(regression)
+        enn = dropout.MLPDropoutENN(
+            output_sizes=list(hiddens) + [test_experiment.num_outputs],
+            dropout_rate=dropout_rate,
+            dropout_input=dropout_input,
+        )
+        experiment = test_experiment.experiment_ctor(enn)
+        experiment.train(10)
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()
