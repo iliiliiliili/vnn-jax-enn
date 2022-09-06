@@ -16,4 +16,5 @@ __pycache__
 tex/*
 
 *.sh
+!run_example.sh
 screenlog.*
