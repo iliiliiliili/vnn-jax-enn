@@ -68,6 +68,7 @@ FLAGS = flags.FLAGS
 def main(_):
 
     os.makedirs("results", exist_ok=True)
+    os.makedirs("single_runs", exist_ok=True)
 
     for k in ["input_dim", "data_ratio", "noise_std", "experiment_group"]:
         print("--" + str(k) + "=" + str(FLAGS.flag_values_dict()[k]))
@@ -125,7 +126,7 @@ def main(_):
                         agent = agents.VanillaEnnAgent(agent_config.config_ctor())
 
                         log_file_name = (
-                            "single_run_"
+                            "single_runs/single_run_"
                             + FLAGS.experiment_group
                             + ("_" if len(FLAGS.experiment_group) > 0 else "")
                             + FLAGS.agent
