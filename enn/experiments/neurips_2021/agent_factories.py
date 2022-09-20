@@ -18,7 +18,7 @@
 
 from functools import reduce
 import jax
-from enn.networks.vnn import Activation
+from enn.networks.vnn import Activation, make_vnn_mlp_with_prior_enn
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 from acme.utils import loggers
@@ -189,6 +189,96 @@ def make_vnn_ctor(
     def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
         output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
         return networks.MLPVariationalENN(
+            output_sizes=output_sizes,
+            activation=activation,
+            activation_mode=activation_mode,
+            use_batch_norm=use_batch_norm,
+            batch_norm_mode=batch_norm_mode,
+            global_std_mode=global_std_mode,
+            initializer=initializer,
+            seed=seed,
+        )
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        """Factory method to create agent_config, swap this for different agents."""
+
+        if loss_function == "default":
+            loss_ctor=enn_losses.default_enn_loss(
+                num_index_samples=num_index_samples,
+                distribution="exponential",
+            )
+        elif loss_function == "gaussian":
+            loss_ctor = enn_losses.gaussian_regression_loss(
+                num_index_samples, noise_scale, l2_weight_decay=0
+            )
+        elif loss_function == "nelbo":
+            loss_ctor = enn_losses.bbb_loss(
+                sigma_0=sigma_0, num_index_samples=num_index_samples
+            )
+        else:
+            raise ValueError(loss_function + "is an unknown loss_function")
+        
+        return agents.VanillaEnnConfig(
+            enn_ctor=make_enn,
+            loss_ctor=loss_ctor,
+            num_batches=num_batches,  # Irrelevant for bandit
+            logger=loggers.make_default_logger("experiment", time_delta=0),
+            seed=seed,
+            optimizer=optax.adam(get_cosine_lr_scheduler(learning_rate, learning_rate * 1e-3, num_batches)),
+        )
+
+    return make_agent_config
+
+def make_vnn_prior_ctor(
+    activation: Optional[Union[Activation, List[Activation]]] = None,
+    activation_mode: Union[
+        Literal["mean"],
+        Literal["std"],
+        Literal["mean+std"],
+        Literal["end"],
+        Literal["mean+end"],
+        Literal["std+end"],
+        Literal["mean+std+end"],
+    ] = "mean",
+    use_batch_norm: bool = False,
+    batch_norm_mode: Union[
+        Literal["mean"],
+        Literal["std"],
+        Literal["mean+std"],
+        Literal["end"],
+        Literal["mean+end"],
+        Literal["std+end"],
+        Literal["mean+std+end"],
+    ] = "mean",
+    global_std_mode: Union[
+        Literal["none"], Literal["replace"], Literal["multiply"]
+    ] = "none",
+    num_index_samples: int = 10,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    learning_rate: int = 1e-3,
+    seed: int = 0,
+    num_batches: int = 1000,
+    initializer: Tuple[str, str] = (None, None),
+    loss_function: float = "default",
+    noise_scale: float = 1,
+    sigma_0 = 100,
+    prior_scale = 0,
+) -> ConfigCtor:
+
+    def get_cosine_lr_scheduler(init_lr, final_lr, n_epoch=1000):
+        import numpy as np
+        def lr_scheduler(epoch_idx):
+            lr = final_lr + 0.5 * (init_lr - final_lr) * (1 + jnp.cos(jnp.pi * epoch_idx / n_epoch))
+            return lr
+
+        return lr_scheduler
+
+    def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
+        output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
+        return make_vnn_mlp_with_prior_enn(
+            dummy_input=jnp.ones([prior.num_train, prior.input_dim]),
+            prior_scale=prior_scale,
             output_sizes=output_sizes,
             activation=activation,
             activation_mode=activation_mode,
@@ -545,6 +635,57 @@ def make_vnn_selected_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
+def make_vnn_prior_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    for activation in ["relu"]:
+        for learning_rate in [1e-3]:
+            for num_layers in [2]:
+                for hidden_size in [50]:
+                    for use_batch_norm in [False]:
+                        for num_batches in [1000]:
+                            for num_index_samples in [100]:
+                                for prior_scale in [0.0, 1.0]:
+                                    for activation_mode, global_std_mode in [
+                                        ("mean", "multiply"), ("none", "multiply"),
+                                        ("none", "none"),
+                                    ]:
+
+                                        batch_norm_mode = activation_mode
+
+                                        current_activation = {
+                                            "relu": jax.nn.relu,
+                                            "tanh": jax.nn.tanh,
+                                        }[activation]
+
+                                        if len(activation_mode.split("+")) > 1:
+                                            current_activation = [current_activation] * len(activation_mode.split("+"))
+
+                                        settings = {
+                                            "agent": "vnn_prior",
+                                            "activation": activation,
+                                            "learning_rate": learning_rate,
+                                            "prior_scale": prior_scale,
+                                            "num_layers": num_layers,
+                                            "hidden_size": hidden_size,
+                                            "activation_mode": activation_mode,
+                                            "batch_norm_mode": batch_norm_mode,
+                                            "use_batch_norm": use_batch_norm,
+                                            "global_std_mode": global_std_mode,
+                                            "num_batches": num_batches,
+                                            "num_index_samples": num_index_samples,
+                                        }
+                                        config_ctor = make_vnn_prior_ctor(
+                                            current_activation, activation_mode, use_batch_norm, batch_norm_mode,
+                                            global_std_mode, num_index_samples, hidden_size, num_batches=num_batches,
+                                            prior_scale=prior_scale
+                                        )
+                                        sweep.append(AgentCtorConfig(settings, config_ctor))
+    return sweep
+
+
+
 def make_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
@@ -687,6 +828,8 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
         agent_sweep = make_bbb_sweep()
     elif agent == "vnn":
         agent_sweep = make_vnn_sweep()
+    elif agent == "vnn_prior":
+        agent_sweep = make_vnn_prior_sweep()
     elif agent == "vnn_selected":
         agent_sweep = make_vnn_selected_sweep()
     elif agent == "vnn_lrelu":

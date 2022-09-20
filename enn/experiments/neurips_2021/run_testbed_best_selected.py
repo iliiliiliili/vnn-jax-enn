@@ -53,6 +53,7 @@ flags.DEFINE_enum(
         "bbb",
         "vnn",
         "vnn_selected",
+        "vnn_prior",
         "vnn_lrelu",
         "vnn_lrelu_init",
         "layer_ensemble",

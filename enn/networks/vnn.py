@@ -536,3 +536,27 @@ class MLPVariationalENN_O(base.EpistemicNetwork):
             return net_out
 
         super().__init__(apply, transformed.init, indexer)
+
+
+def make_vnn_mlp_with_prior_enn(
+    dummy_input: chex.Array,
+    prior_scale: float = 1.0,
+    seed: int = 2605,
+    **kwargs
+) -> base.EpistemicNetwork:
+
+    enn = MLPVariationalENN(
+        **kwargs,
+    )
+    init_key, _ = jax.random.split(jax.random.PRNGKey(seed))
+    prior_params = enn.init(init_key, dummy_input, jnp.array([]))
+
+    # Apply function selects the appropriate index of the ensemble output.
+    def apply_with_prior(
+        params: hk.Params, x: base.Array, z: base.Index
+    ) -> base.OutputWithPrior:
+        ensemble_train = enn.apply(params, x, z)
+        ensemble_prior = enn.apply(prior_params, x, z) * prior_scale
+        return base.OutputWithPrior(train=ensemble_train, prior=ensemble_prior)
+
+    return base.EpistemicNetwork(apply_with_prior, enn.init, enn.indexer)
