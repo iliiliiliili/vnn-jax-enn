@@ -8,6 +8,10 @@ Bayesian Neural Networks (BNNs) provide a tool to estimate the uncertainty of a 
 
 Use `run_example.sh` to train a single model and evaluate its uncertainty quality. Results are saved in `results` folder and can be visualized by `tools/create_*_plots.py`
 
+## Structure of VNNs
+
+![VNNs](./VNN_diagram.png)
+
 ## Citation
 
 If you use this work for your research, you can cite it as:
